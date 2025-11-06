@@ -4,16 +4,26 @@
 
 ### The Ultimate PDF Processing Engine for AI Agents
 
-[![MseeP.ai Security](https://mseep.net/pr/sylphxltd-pdf-reader-mcp-badge.png)](https://mseep.ai/app/sylphxltd-pdf-reader-mcp)
 [![CI/CD](https://github.com/sylphxltd/pdf-reader-mcp/actions/workflows/ci.yml/badge.svg)](https://github.com/sylphxltd/pdf-reader-mcp/actions/workflows/ci.yml)
 [![codecov](https://codecov.io/gh/sylphxltd/pdf-reader-mcp/graph/badge.svg?token=VYRQFB40UN)](https://codecov.io/gh/sylphxltd/pdf-reader-mcp)
 [![npm version](https://badge.fury.io/js/%40sylphx%2Fpdf-reader-mcp.svg)](https://www.npmjs.com/package/@sylphx/pdf-reader-mcp)
 [![Downloads](https://img.shields.io/npm/dm/@sylphx/pdf-reader-mcp.svg)](https://www.npmjs.com/package/@sylphx/pdf-reader-mcp)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
-<a href="https://glama.ai/mcp/servers/@sylphx/pdf-reader-mcp">
-  <img width="380" height="200" src="https://glama.ai/mcp/servers/@sylphx/pdf-reader-mcp/badge" alt="PDF Reader MCP Server" />
+<table>
+<tr>
+<td align="center">
+<a href="https://mseep.ai/app/sylphxltd-pdf-reader-mcp">
+<img src="https://mseep.net/pr/sylphxltd-pdf-reader-mcp-badge.png" alt="MseeP.ai Security Assessment" width="200"/>
 </a>
+</td>
+<td align="center">
+<a href="https://glama.ai/mcp/servers/@sylphx/pdf-reader-mcp">
+<img src="https://glama.ai/mcp/servers/@sylphx/pdf-reader-mcp/badge" alt="Glama MCP Server" width="340"/>
+</a>
+</td>
+</tr>
+</table>
 
 **Trusted by developers worldwide** • **Battle-tested** • **Production-ready**
 
