@@ -2,6 +2,30 @@
 
 All notable changes to this project will be documented in this file. See [standard-version](https://github.com/conventional-changelog/standard-version) for commit guidelines.
 
+## [1.3.0](https://github.com/sylphxltd/pdf-reader-mcp/compare/v1.2.0...v1.3.0) (2025-11-06)
+
+### Features
+
+* **Path Handling**: Remove absolute path restriction ([#212](https://github.com/sylphxltd/pdf-reader-mcp/pull/212))
+  - **BREAKING CHANGE**: Absolute paths are now supported for local PDF files
+  - Both absolute and relative paths are accepted in the `path` parameter
+  - Relative paths are resolved against the current working directory (process.cwd())
+  - Fixes [#136](https://github.com/sylphxltd/pdf-reader-mcp/issues/136) - MCP error -32602: Absolute paths are not allowed
+  - Windows paths (e.g., `C:\Users\...`) and Unix paths (e.g., `/home/...`) now work correctly
+  - Configure working directory via `cwd` in MCP server settings for relative path resolution
+
+### Bug Fixes
+
+* Fix Zod validation error handling - use `error.issues` instead of `error.errors`
+* Update dependencies to latest versions (Zod 3.25.76, @modelcontextprotocol/sdk 1.21.0)
+
+### Code Quality
+
+* All 103 tests passing
+* Coverage: 94%+ lines, 98%+ functions, 84%+ branches
+* TypeScript strict mode compliance
+* Zero linting errors
+
 ## [1.2.0](https://github.com/sylphxltd/pdf-reader-mcp/compare/v1.1.0...v1.2.0) (2025-10-31)
 
 ### Features
