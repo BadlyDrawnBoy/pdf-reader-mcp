@@ -332,12 +332,14 @@ export const extractPageContent = async (pdfDocument, pageNum, includeImages, so
                             resolve(result);
                             return;
                         }
-                        /* c8 ignore next */ }
+                        /* c8 ignore next */
+                    }
                     catch (error) {
                         /* c8 ignore next */ const message = error instanceof Error ? error.message : String(error);
                         /* c8 ignore next */ console.warn(
                         /* c8 ignore next */ `[PDF Reader MCP] Error getting image from commonObjs ${imageName}: ${message}`
-                        /* c8 ignore next */ );
+                        /* c8 ignore next */
+                        );
                     }
                 }
                 // Try synchronous get first - if image is already loaded

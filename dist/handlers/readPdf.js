@@ -70,8 +70,8 @@ const processSingleSource = async (source, options) => {
         let errorMessage = `Failed to process PDF from ${sourceDescription}.`;
         if (error instanceof McpError) {
             errorMessage = error.message;
-        }
-        else /* c8 ignore next */ if (error instanceof Error) {
+        } /* c8 ignore next */
+        else if (error instanceof Error) {
             errorMessage += ` Reason: ${error.message}`;
         }
         else {
@@ -93,7 +93,7 @@ export const handleReadPdfFunc = async (args) => {
     }
     catch (error) {
         if (error instanceof z.ZodError) {
-            throw new McpError(ErrorCode.InvalidParams, `Invalid arguments: ${error.errors.map((e) => `${e.path.join('.')} (${e.message})`).join(', ')}`);
+            throw new McpError(ErrorCode.InvalidParams, `Invalid arguments: ${error.issues.map((e) => `${e.path.join('.')} (${e.message})`).join(', ')}`);
         }
         /* c8 ignore next */
         const message = error instanceof Error ? error.message : String(error);
