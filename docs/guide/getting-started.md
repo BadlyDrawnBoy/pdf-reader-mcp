@@ -21,7 +21,7 @@ The `read_pdf` tool accepts an object with the following properties:
 - `sources` (Array\<Object\>, required): An array of PDF sources to process. Each source object must contain either a `path` or a `url`.
   - `path` (string, optional): Relative path to the local PDF file within the project root.
   - `url` (string, optional): URL of the PDF file.
-  - `pages` (Array<number> | string, optional): Extract text only from specific pages (1-based) or ranges (e.g., `'1-3, 5'`). If provided, `include_full_text` is ignored for this source.
+  - `pages` (Array\<number\> | string, optional): Extract text only from specific pages (1-based) or ranges (e.g., `'1-3, 5'`). If provided, `include_full_text` is ignored for this source.
 - `include_full_text` (boolean, optional, default: `false`): Include the full text content of each PDF (only if `pages` is not specified for that source).
 - `include_metadata` (boolean, optional, default: `true`): Include metadata and info objects for each PDF.
 - `include_page_count` (boolean, optional, default: `true`): Include the total number of pages for each PDF.
