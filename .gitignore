@@ -11,3 +11,4 @@ docs/.vitepress/cache
 
 # Test Reports
 test-report.junit.xml
+.vercel

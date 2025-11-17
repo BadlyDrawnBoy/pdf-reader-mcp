@@ -52,7 +52,7 @@
     "check-format": "biome format .",
     "check": "biome check .",
     "check:fix": "biome check --write .",
-    "validate": "npm run check && npm run test",
+    "validate": "bun run check && bun run test",
     "docs:dev": "vitepress dev docs",
     "docs:build": "vitepress build docs",
     "docs:preview": "vitepress preview docs",
@@ -61,9 +61,12 @@
     "benchmark": "vitest bench",
     "clean": "rm -rf dist coverage",
     "docs:api": "typedoc --entryPoints src/index.ts --tsconfig tsconfig.json --plugin typedoc-plugin-markdown --out docs/api --readme none",
-    "prepublishOnly": "pnpm run clean && pnpm run build",
+    "prepublishOnly": "bun run clean && bun run build",
     "release": "standard-version",
-    "prepare": "husky"
+    "prepare": "husky",
+    "changeset": "changeset",
+    "version-packages": "changeset version",
+    "release:new": "bun run build && changeset publish"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.21.0",
@@ -75,6 +78,7 @@
   },
   "devDependencies": {
     "@biomejs/biome": "^2.3.2",
+    "@changesets/cli": "^2.29.7",
     "@commitlint/cli": "^20.1.0",
     "@commitlint/config-conventional": "^20.0.0",
     "@types/glob": "^8.1.0",
