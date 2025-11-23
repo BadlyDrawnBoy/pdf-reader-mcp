@@ -85,6 +85,7 @@
     "@types/node": "^24.0.7",
     "@types/pngjs": "^6.0.5",
     "@vitest/coverage-v8": "^4.0.8",
+    "bunup": "^0.16.10",
     "husky": "^9.1.7",
     "lint-staged": "^16.2.6",
     "standard-version": "^9.5.0",
