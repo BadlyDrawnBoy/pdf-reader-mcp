@@ -346,6 +346,41 @@ npm install -g @sylphx/pdf-reader-mcp
 
 ## 📖 API Reference
 
+### `pdf_get_metadata` — metadata & page label probe
+
+Retrieves document info, metadata objects, page count, page-label hints, and outline presence in one lightweight call.
+
+| Parameter | Type | Description | Default |
+|-----------|------|-------------|---------|
+| `sources` | Array | List of PDF sources to inspect | Required |
+| `include_metadata` | boolean | Include metadata/info objects | `true` |
+| `include_page_count` | boolean | Include total page count | `true` |
+| `include_page_labels` | boolean | Detect and sample page labels | `true` |
+| `include_outline` | boolean | Report whether an outline/TOC exists | `true` |
+
+**Output:** For each source, returns `info`/`metadata`, `num_pages`, fingerprint, `has_page_labels`, `sample_page_labels`, and `has_outline` when requested.
+
+### `pdf_get_toc` — table of contents flattening
+
+Flattens PDF outline entries into a depth-aware list with resolved page numbers.
+
+| Parameter | Type | Description | Default |
+|-----------|------|-------------|---------|
+| `sources` | Array | List of PDF sources to load | Required |
+
+**Output:** `has_outline` plus `toc` items with `title`, resolved `page` (when available), and `depth` values.
+
+### `pdf_get_page_stats` — page-level length summary
+
+Counts characters and (optionally) images per page to size work before full extraction.
+
+| Parameter | Type | Description | Default |
+|-----------|------|-------------|---------|
+| `sources` | Array | List of PDF sources to scan | Required |
+| `include_images` | boolean | Count images while scanning pages | `false` |
+
+**Output:** `num_pages`, `page_stats` with `page`, `text_length`, `image_count`, `has_text`, `has_images`, plus `warnings` for invalid page specs.
+
 ### `pdf_read_pages` — structured page reader
 
 Extracts ordered text per page with optional image indexes (no binary data) plus truncation/whitespace controls.
@@ -376,15 +411,109 @@ Iterates pages in reading order with plain text or regex matching. Returns page 
 | `preserve_whitespace` | boolean | Keep original whitespace (otherwise collapsed) | `false` |
 | `trim_lines` | boolean | Trim leading/trailing whitespace per line | `true` |
 
+### `pdf_list_images` — enumerate image metadata
+
+Lists page/index/dimension/format info for all images (or filtered pages) without base64 payloads.
+
+| Parameter | Type | Description | Default |
+|-----------|------|-------------|---------|
+| `sources` | Array | List of PDF sources to inspect (honors `pages` filters) | Required |
+
+**Output:** `images` array with page/index/width/height/format, `total_images`, and `warnings` when page ranges are out of bounds.
+
+### `pdf_get_image` — fetch a single embedded image
+
+Downloads one image as PNG along with metadata and any page warnings.
+
+| Parameter | Type | Description | Default |
+|-----------|------|-------------|---------|
+| `source` | Object | PDF source (path/url and optional pages) | Required |
+| `page` | number | 1-based page number containing the image | Required |
+| `index` | number | 0-based image index within that page | Required |
+
+**Output:** JSON metadata (`page`, `index`, `width`, `height`, `format`, `warnings`) plus a PNG part containing the base64 image data.
+
+### `pdf_render_page` — rasterize a page
+
+Renders a PDF page to PNG for downstream vision tasks or OCR.
+
+| Parameter | Type | Description | Default |
+|-----------|------|-------------|---------|
+| `source` | Object | PDF source (path/url) | Required |
+| `page` | number | 1-based page number to render | Required |
+| `scale` | number | Rendering scale factor (1.0 = 100%) | `1.5` |
+
+**Output:** PNG image content plus metadata (`page`, `width`, `height`, `scale`, `fingerprint`).
+
+### `pdf_ocr_page` — OCR a rendered page
+
+Runs OCR against a rendered page with provider overrides and caching.
+
+| Parameter | Type | Description | Default |
+|-----------|------|-------------|---------|
+| `source` | Object | PDF source (path/url) | Required |
+| `page` | number | 1-based page to OCR | Required |
+| `scale` | number | Rendering scale applied before OCR | `1.5` |
+| `provider` | Object | OCR provider configuration (type/endpoint/model/language/extras) | unset |
+| `cache` | boolean | Use cached OCR result when available | `true` |
+
+**Output:** `text`, `provider`, `fingerprint`, `from_cache`, and `page` identifiers.
+
+### `pdf_ocr_image` — OCR a single image
+
+Targets one embedded image for OCR without rasterizing the full page again.
+
+| Parameter | Type | Description | Default |
+|-----------|------|-------------|---------|
+| `source` | Object | PDF source (path/url) | Required |
+| `page` | number | 1-based page hosting the image | Required |
+| `index` | number | 0-based image index on that page | Required |
+| `provider` | Object | OCR provider configuration | unset |
+| `cache` | boolean | Use cached OCR result when available | `true` |
+
+**Output:** `text`, `provider`, `fingerprint`, `from_cache`, and `image` identifiers (`page`, `index`).
+
+### `pdf_cache_stats` — inspect caches
+
+Returns cache entry counts and keys for text and OCR results.
+
+| Parameter | Type | Description | Default |
+|-----------|------|-------------|---------|
+| _none_ | — | No input parameters | — |
+
+**Output:** `stats` with `text_entries`, `ocr_entries`, and corresponding key listings.
+
+### `pdf_cache_clear` — flush caches
+
+Clears cached text and/or OCR entries.
+
+| Parameter | Type | Description | Default |
+|-----------|------|-------------|---------|
+| `scope` | string | Cache scope: `text`, `ocr`, or `all` | `all` |
+
+**Output:** Boolean flags `cleared_text` and `cleared_ocr` reflecting what was removed.
+
 ### `read_pdf` — compatibility tool
 
-Legacy all-in-one extractor kept for backward compatibility. Use when you need the prior combined output shape (full text, metadata, optional images) in a single call.
+Legacy all-in-one extractor kept for backward compatibility. Uses modern loaders but preserves the combined output shape.
+
+| Parameter | Type | Description | Default |
+|-----------|------|-------------|---------|
+| `sources` | Array | List of PDF sources to process | Required |
+| `include_full_text` | boolean | Return concatenated full text when `pages` are not specified | `false` |
+| `include_metadata` | boolean | Include metadata/info objects | `true` |
+| `include_page_count` | boolean | Include total page count | `true` |
+| `include_images` | boolean | Include embedded images with base64 data | `false` |
+
+**Output:** Backward-compatible payload with `full_text` or `page_texts`, `page_contents`, `metadata`/`info`, `num_pages`, optional `images`, and `warnings`.
 
 ## 🧭 Navigation & search playbook
 
-1) **Orient first:** Call `pdf_get_toc` to grab outline entries and `pdf_get_metadata` with page labels enabled so you know how the document numbers its pages.
-2) **Skim with structure:** Use `pdf_read_pages` with `pages` filters (e.g., `"1-3,10"`) and `max_chars_per_page` to keep payloads light while preserving ordered `lines` and page labels. Add `include_image_indexes` when you need to reference page visuals without downloading base64 data.
-3) **Search precisely:** Run `pdf_search` with `pages` filters to constrain the surface area, dial `context_chars` to the snippet length you want, and set `max_hits` to short-circuit once enough matches are found. Combine with `preserve_whitespace` when spacing-sensitive patterns or regex captures matter.
+1) **Orient first:** Use `pdf_get_metadata` to grab page counts, fingerprints, page label samples, and outline presence.
+2) **Map the structure:** Call `pdf_get_toc` for outline entries and `pdf_get_page_stats` to see which sections contain text/images before heavy reads.
+3) **Dive deeper:** Pull structured text with `pdf_read_pages`, search with `pdf_search`, and fetch visuals with `pdf_render_page`/`pdf_get_image` as needed.
+4) **Extract text when needed:** Run `pdf_ocr_page` or `pdf_ocr_image` for vision-only content, leaning on cached results where possible.
+5) **Maintain performance:** Inspect caches with `pdf_cache_stats` and clear scopes via `pdf_cache_clear` to refresh results between runs.
 
 ---
 
