@@ -13,11 +13,12 @@ import { pdfSourceSchema } from './pdfSource.js';
 
 export const ocrProviderSchema = object({
   name: optional(str(description('Friendly provider identifier for logs.'))),
-  type: optional(str(description('Provider type: http or mock.'))),
+  type: optional(str(description('Provider type: http, mistral, or mock.'))),
   endpoint: optional(str(description('OCR HTTP endpoint.'))),
   api_key: optional(str(description('Bearer token for the OCR provider.'))),
   model: optional(str(description('Model name or identifier.'))),
   language: optional(str(description('Preferred language for OCR.'))),
+  timeout_ms: optional(num(gte(1), description('Timeout in milliseconds for OCR requests.'))),
   extras: optional(record(str(), str(), description('Additional provider-specific options.'))),
 });
 
