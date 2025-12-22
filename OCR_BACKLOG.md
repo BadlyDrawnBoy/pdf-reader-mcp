@@ -255,6 +255,35 @@ chat_response = client.chat.complete(
 
 ### Medium Priority
 
+- [ ] **Two-tier Vision → OCR workflow** 🆕
+  - **Tier 1: Vision Classification (quick, cheap)**
+    - Classify image type: "timing diagram", "table", "schematic", etc.
+    - Provide context: "4 signals, technical drawing"
+    - Ask: "Want more details?" → proceed to Tier 2
+  - **Tier 2: OCR Deep Analysis (detailed, expensive)**
+    - Extract all labels, values, annotations
+    - Precise technical data: "VDD33: 3.3V @ t=0ms, threshold: 1.62V"
+  - **Triggers:**
+    - Image markers: `[IMAGE n: ...]` → offer Vision classification
+    - Complex tables: Detected via text extraction → offer OCR
+    - User choice: Both tiers should be optional
+  - **Benefits:**
+    - Cost-effective: Vision for triage, OCR only when needed
+    - Flexible: User controls depth of analysis
+  - **Implementation:**
+    - Vision wrapper (existing: chat.complete)
+    - OCR wrapper (new: ocr.process with mistral-ocr-2512)
+    - Workflow orchestration tool/skill
+
+- [ ] **Build dedicated Mistral OCR API wrapper** 🆕
+  - Use `client.ocr.process()` instead of Vision API
+  - Model: `mistral-ocr-2512` (OCR 3)
+  - Endpoint: `/v1/ocr`
+  - Features: table_format, extract_header/footer, include_image_base64
+  - Structured output: markdown, HTML tables, images
+  - Price: $2/1000 pages ($1 with Batch API)
+  - **Note:** Current wrapper uses Vision API (chat.complete) - good for classification, not OCR
+
 - [ ] **Add troubleshooting guide** (`docs/troubleshooting/ocr.md`)
   - Common errors (missing endpoint, auth failures)
   - Response format validation errors
