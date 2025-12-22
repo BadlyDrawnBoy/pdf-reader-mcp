@@ -214,14 +214,14 @@ chat_response = client.chat.complete(
 - **Pros:** Native support, no wrapper needed
 - **Cons:** Increases codebase complexity, maintenance burden
 
-### ❌ Documentation Gaps
+### ⚠️ Documentation Status
 
-1. **No provider examples** (Mistral, OpenAI Vision, Google Vision, etc.)
-2. **Mock provider undocumented** (exists in code, not in docs)
-3. **Caching details missing** (cache key construction, invalidation)
-4. **`extras` field unexplained** (no concrete use cases)
-5. **No troubleshooting guide** (error handling, debugging)
-6. **Provider contract unclear** (required response format: `{ text }` or `{ ocr }`)
+1. ~~**No provider examples**~~ ✅ Fixed (2025-12-22) - Added to README and docs/guide/ocr-providers.md
+2. ~~**Mock provider undocumented**~~ ✅ Fixed (2025-12-22) - Added to docs/guide/getting-started.md
+3. ~~**Caching details missing**~~ ✅ Fixed (2025-12-22) - Documented in ocr-providers.md
+4. ~~**`extras` field unexplained**~~ ✅ Fixed (2025-12-22) - Examples in provider wrapper code
+5. ~~**No troubleshooting guide**~~ ✅ Fixed (2025-12-22) - Troubleshooting section in ocr-providers.md
+6. ~~**Provider contract unclear**~~ ✅ Fixed (2025-12-22) - Documented in README and guide
 
 ## Backlog
 
@@ -231,24 +231,27 @@ chat_response = client.chat.complete(
   - Simple Express.js/Node.js HTTP server
   - Translates pdf-reader-mcp format → Mistral Vision API
   - Deploy as separate service or Docker container
-  - Template code already drafted in this backlog (see Implementation Example)
+  - ✅ Template code now in docs/guide/ocr-providers.md (copy-paste ready)
 
-- [ ] **Add provider examples** to README/docs
-  - Mistral Vision wrapper (with setup instructions)
-  - OpenAI Vision API wrapper (similar pattern)
-  - Google Cloud Vision wrapper
-  - Document that Mistral OCR API is incompatible (document-level vs page-level)
+- [x] **Add provider examples** to README/docs ✅ (2025-12-22)
+  - ✅ Mistral Vision wrapper (with setup instructions)
+  - ✅ OpenAI Vision API wrapper (similar pattern)
+  - ✅ Google Cloud Vision wrapper
+  - ✅ Documented that Mistral OCR API is incompatible (document-level vs page-level)
+  - ✅ Added practical OCR flow to README
 
-- [ ] **Create `docs/guide/ocr-providers.md`**
-  - Architecture overview: pdf-reader-mcp → wrapper → vision APIs
-  - Step-by-step wrapper setup (Mistral, OpenAI, Google)
-  - Environment variables and API keys
-  - Testing and troubleshooting
+- [x] **Create `docs/guide/ocr-providers.md`** ✅ (2025-12-22)
+  - ✅ Architecture overview: pdf-reader-mcp → wrapper → vision APIs
+  - ✅ Step-by-step wrapper setup (Mistral, OpenAI, Google)
+  - ✅ Environment variables and API keys
+  - ✅ Testing and troubleshooting
+  - ✅ Cache behavior documentation
 
-- [ ] **Document mock provider**
-  - When to use (testing, development)
-  - Default behavior (returns placeholder text)
-  - How to test without real API calls
+- [x] **Document mock provider** ✅ (2025-12-22)
+  - ✅ When to use (testing, development, CI/CD)
+  - ✅ Default behavior (returns placeholder text)
+  - ✅ How to test without real API calls
+  - ✅ Added to docs/guide/getting-started.md with integration testing tips
 
 ### Medium Priority
 
