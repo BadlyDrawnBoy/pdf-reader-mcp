@@ -38,10 +38,13 @@ const processPage = async (
     return cached;
   }
 
+  // Extract images if either includeImageIndexes or insertMarkers is enabled
+  const shouldIncludeImages = options.includeImageIndexes || options.insertMarkers;
+
   const items = await extractPageContent(
     pdfDocument,
     pageNum,
-    options.includeImageIndexes,
+    shouldIncludeImages,
     sourceDescription
   );
 
