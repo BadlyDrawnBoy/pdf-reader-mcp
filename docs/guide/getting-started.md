@@ -189,6 +189,42 @@ Responds with page dimensions, scale, fingerprint, and a PNG part for the render
 
 Outputs OCR `text`, provider info, whether it came `from_cache`, and page identifiers. Use `pdf_ocr_image` similarly when you already know the image index.
 
+**Mock OCR provider — fast, no-network placeholder**
+
+Use the built-in mock provider when you want predictable OCR responses without hitting an external API (ideal for local development, CI, and integration tests).
+
+```json
+{
+  "source": { "path": "./docs/report.pdf" },
+  "page": 1,
+  "provider": { "type": "mock", "name": "test-ocr" },
+  "cache": false
+}
+```
+
+What it does:
+- Returns immediately with placeholder text; never performs network calls.
+- Uses the provided `name` (or `mock` by default) in the response so you can assert which provider ran.
+
+Example response:
+
+```json
+{
+  "source": "./docs/report.pdf",
+  "success": true,
+  "data": {
+    "text": "OCR provider not configured. Supply provider options to enable OCR.",
+    "provider": "test-ocr",
+    "fingerprint": "<document-fingerprint>",
+    "from_cache": false,
+    "page": 1
+  }
+}
+```
+
+Integration testing tip:
+- Exercise the OCR tools end-to-end without external dependencies by calling `pdf_ocr_page` (or `pdf_ocr_image`) with `provider: { "type": "mock" }` and `cache: false`. Assert on the static `text` string and `provider` name to confirm the handler, caching guards, and payload shape are wired correctly.
+
 ### Cache management
 
 Inspect cache state or clear scopes between runs:

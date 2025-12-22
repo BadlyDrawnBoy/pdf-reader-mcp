@@ -525,6 +525,23 @@ Runs OCR against a rendered page with provider overrides and caching.
 
 The service receives `{ "image": "<base64 PNG>", "model": "vision-large", "language": "en", "extras": { "detect_tables": true } }` and must respond with `{ "text": "..." }` (or `{ "ocr": "..." }`).
 
+**Provider Examples (quick start):**
+
+- **Mistral Vision (HTTP wrapper):**
+  ```json
+  { "type": "http", "endpoint": "http://localhost:8787/ocr", "model": "mistral-large-2407" }
+  ```
+- **OpenAI Vision (HTTP wrapper):**
+  ```json
+  { "type": "http", "endpoint": "http://localhost:8788/ocr", "model": "gpt-4o-mini" }
+  ```
+See `docs/guide/ocr-providers.md` for full setup and wrapper code.
+
+**Practical OCR flow:**
+1) Detect pages that need vision: `pdf_read_pages` with `"insert_markers": true` to find `[IMAGE n: ...]` markers.  
+2) OCR only the candidates: call `pdf_ocr_page` with your provider config (e.g., Mistral or OpenAI wrapper above).  
+3) Rerun cheaply: keep `cache: true` so repeated `pdf_ocr_page` calls reuse the cached text instead of re-hitting the API.
+
 ### `pdf_ocr_image` — OCR a single image
 
 Targets one embedded image for OCR without rasterizing the full page again.
@@ -880,9 +897,9 @@ See [CONTRIBUTING.md](./CONTRIBUTING.md)
 - [x] Y-coordinate ordering (v1.2.0)
 - [x] Absolute paths (v1.3.0)
 - [x] 94%+ test coverage (v1.3.0)
+- [x] OCR for scanned PDFs
 
 **🚀 Next**
-- [ ] OCR for scanned PDFs
 - [ ] Annotation extraction
 - [ ] Form field extraction
 - [ ] Table detection
