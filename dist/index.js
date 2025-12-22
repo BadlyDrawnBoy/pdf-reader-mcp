@@ -1537,7 +1537,12 @@ var normalizeLine = (input, options) => {
   return normalized;
 };
 var buildNormalizedPageText = (items, options) => {
-  const { preserveWhitespace = false, trimLines = true, maxCharsPerPage, insertMarkers = false } = options;
+  const {
+    preserveWhitespace = false,
+    trimLines = true,
+    maxCharsPerPage,
+    insertMarkers = false
+  } = options;
   const normalizedLines = [];
   let truncated = false;
   let consumed = 0;
@@ -1633,7 +1638,8 @@ var processPage = async (pdfDocument, pageNum, sourceDescription, options, finge
   if (cached) {
     return cached;
   }
-  const items = await extractPageContent(pdfDocument, pageNum, options.includeImageIndexes, sourceDescription);
+  const shouldIncludeImages = options.includeImageIndexes || options.insertMarkers;
+  const items = await extractPageContent(pdfDocument, pageNum, shouldIncludeImages, sourceDescription);
   const normalized = buildNormalizedPageText(items, {
     preserveWhitespace: options.preserveWhitespace,
     trimLines: options.trimLines,
