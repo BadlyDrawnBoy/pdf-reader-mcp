@@ -4,6 +4,7 @@ import { determinePagesToProcess, getTargetPages } from '../pdf/parser.js';
 import { getImageArgsSchema } from '../schemas/getImage.js';
 import type { ExtractedImage } from '../types/pdf.js';
 import { createLogger } from '../utils/logger.js';
+import { OCR_IMAGE_RECOMMENDATION } from '../utils/ocrRecommendation.js';
 import { withPdfDocument } from '../utils/pdfLifecycle.js';
 
 const logger = createLogger('GetImage');
@@ -14,6 +15,7 @@ const buildImageMetadata = (targetImage: ExtractedImage, warnings: string[]): ob
   width: targetImage.width,
   height: targetImage.height,
   format: targetImage.format,
+  recommendation: OCR_IMAGE_RECOMMENDATION,
   warnings: warnings.length > 0 ? warnings : undefined,
 });
 

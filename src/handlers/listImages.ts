@@ -8,6 +8,7 @@ import {
 import { listImagesArgsSchema } from '../schemas/listImages.js';
 import type { PdfImageInfo, PdfImageListResult } from '../types/pdf.js';
 import { createLogger } from '../utils/logger.js';
+import { OCR_IMAGE_RECOMMENDATION } from '../utils/ocrRecommendation.js';
 import { withPdfDocument } from '../utils/pdfLifecycle.js';
 
 const logger = createLogger('ListImages');
@@ -16,6 +17,7 @@ const MAX_CONCURRENT_SOURCES = 3;
 const summarizeImages = (images: PdfImageInfo[], warnings: string[]) => ({
   images,
   total_images: images.length,
+  recommendation: OCR_IMAGE_RECOMMENDATION,
   ...(warnings.length > 0 ? { warnings } : {}),
 });
 

@@ -92,6 +92,7 @@ export interface PdfImageInfo {
 export interface PdfImageListData {
   images: PdfImageInfo[];
   total_images: number;
+  recommendation?: string;
   warnings?: string[];
 }
 
@@ -112,6 +113,7 @@ export interface PdfRenderResult {
     scale: number;
     fingerprint: string;
     image_base64: string;
+    recommendation?: string;
   };
   error?: string;
 }

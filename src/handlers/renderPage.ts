@@ -3,6 +3,7 @@ import { renderPageToPng } from '../pdf/render.js';
 import { renderPageArgsSchema } from '../schemas/renderPage.js';
 import { getDocumentFingerprint } from '../utils/fingerprint.js';
 import { createLogger } from '../utils/logger.js';
+import { OCR_IMAGE_RECOMMENDATION } from '../utils/ocrRecommendation.js';
 import { withPdfDocument } from '../utils/pdfLifecycle.js';
 
 const logger = createLogger('RenderPage');
@@ -30,6 +31,7 @@ const renderTargetPage = async (
         height: rendered.height,
         scale: rendered.scale,
         fingerprint,
+        recommendation: OCR_IMAGE_RECOMMENDATION,
       },
       imageData: rendered.data,
     };
