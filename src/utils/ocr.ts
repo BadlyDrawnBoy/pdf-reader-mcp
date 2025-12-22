@@ -1,10 +1,11 @@
 export interface OcrProviderOptions {
   name?: string | undefined;
-  type?: 'http' | 'mock' | undefined;
+  type?: 'http' | 'mock' | 'mistral' | undefined;
   endpoint?: string | undefined;
   api_key?: string | undefined;
   model?: string | undefined;
   language?: string | undefined;
+  timeout_ms?: number | undefined;
   extras?: Record<string, unknown> | undefined;
 }
 
@@ -15,6 +16,7 @@ export type LooseOcrProviderOptions = {
   api_key?: string | undefined;
   model?: string | undefined;
   language?: string | undefined;
+  timeout_ms?: number | undefined;
   extras?: Record<string, unknown> | undefined;
 };
 
@@ -22,6 +24,39 @@ interface OcrResult {
   provider: string;
   text: string;
 }
+
+const DEFAULT_OCR_TIMEOUT_MS = 15000;
+const DEFAULT_MISTRAL_ENDPOINT = 'https://api.mistral.ai/v1/chat/completions';
+
+const resolveTimeoutMs = (provider?: OcrProviderOptions): number =>
+  provider?.timeout_ms && provider.timeout_ms > 0 ? provider.timeout_ms : DEFAULT_OCR_TIMEOUT_MS;
+
+const fetchWithTimeout = async (
+  url: string,
+  init: RequestInit,
+  timeoutMs: number
+): Promise<Response> => {
+  const controller = new AbortController();
+  let timedOut = false;
+  const timeoutId = setTimeout(() => {
+    timedOut = true;
+    controller.abort();
+  }, timeoutMs);
+
+  try {
+    return await fetch(url, { ...init, signal: controller.signal });
+  } catch (error: unknown) {
+    if (timedOut) {
+      throw new Error(`OCR request timed out after ${timeoutMs}ms.`);
+    }
+    if (error instanceof Error && error.name === 'AbortError') {
+      throw new Error(`OCR request timed out after ${timeoutMs}ms.`);
+    }
+    throw error;
+  } finally {
+    clearTimeout(timeoutId);
+  }
+};
 
 const handleMockOcr = (provider?: OcrProviderOptions): OcrResult => ({
   provider: provider?.name ?? 'mock',
@@ -44,16 +79,20 @@ const handleHttpOcr = async (
     headers['Authorization'] = `Bearer ${provider.api_key}`;
   }
 
-  const response = await fetch(provider.endpoint, {
-    method: 'POST',
-    headers,
-    body: JSON.stringify({
-      image: base64Image,
-      model: provider.model,
-      language: provider.language,
-      extras: provider.extras,
-    }),
-  });
+  const response = await fetchWithTimeout(
+    provider.endpoint,
+    {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({
+        image: base64Image,
+        model: provider.model,
+        language: provider.language,
+        extras: provider.extras,
+      }),
+    },
+    resolveTimeoutMs(provider)
+  );
 
   if (!response.ok) {
     const errorText = await response.text();
@@ -75,6 +114,89 @@ const handleHttpOcr = async (
   };
 };
 
+const handleMistralOcr = async (
+  base64Image: string,
+  provider: OcrProviderOptions
+): Promise<OcrResult> => {
+  const apiKey = provider.api_key ?? process.env.MISTRAL_API_KEY;
+  if (!apiKey) {
+    throw new Error('Mistral OCR provider requires MISTRAL_API_KEY.');
+  }
+
+  const endpoint = provider.endpoint ?? DEFAULT_MISTRAL_ENDPOINT;
+  const imageUrl = base64Image.startsWith('data:')
+    ? base64Image
+    : `data:image/png;base64,${base64Image}`;
+  const prompt =
+    (provider.extras && typeof provider.extras.prompt === 'string'
+      ? provider.extras.prompt
+      : undefined) ??
+    'Extract and transcribe all text from this image. Preserve layout and return markdown.';
+  const temperature =
+    provider.extras && typeof provider.extras.temperature === 'string'
+      ? Number.parseFloat(provider.extras.temperature)
+      : undefined;
+  const maxTokens =
+    provider.extras && typeof provider.extras.max_tokens === 'string'
+      ? Number.parseInt(provider.extras.max_tokens, 10)
+      : undefined;
+
+  const response = await fetchWithTimeout(
+    endpoint,
+    {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${apiKey}`,
+      },
+      body: JSON.stringify({
+        model: provider.model ?? 'mistral-large-2512',
+        messages: [
+          {
+            role: 'user',
+            content: [
+              { type: 'text', text: prompt },
+              { type: 'image_url', image_url: imageUrl },
+            ],
+          },
+        ],
+        temperature: Number.isFinite(temperature) ? temperature : 0,
+        max_tokens: Number.isFinite(maxTokens) ? maxTokens : 4000,
+      }),
+    },
+    resolveTimeoutMs(provider)
+  );
+
+  if (!response.ok) {
+    const errorText = await response.text();
+    throw new Error(
+      `Mistral OCR request failed with status ${response.status}: ${errorText || response.statusText}`
+    );
+  }
+
+  const data = (await response.json()) as {
+    choices?: Array<{ message?: { content?: string | Array<{ text?: string }> } }>;
+    text?: string;
+  };
+  const content = data.text ?? data.choices?.[0]?.message?.content;
+  let text: string | undefined;
+
+  if (typeof content === 'string') {
+    text = content;
+  } else if (Array.isArray(content)) {
+    text = content.map((chunk) => chunk.text).filter(Boolean).join('');
+  }
+
+  if (!text) {
+    throw new Error('Mistral OCR response missing text field.');
+  }
+
+  return {
+    provider: provider.name ?? 'mistral',
+    text,
+  };
+};
+
 export const sanitizeProviderOptions = (
   provider?: LooseOcrProviderOptions
 ): OcrProviderOptions | undefined => {
@@ -85,11 +207,14 @@ export const sanitizeProviderOptions = (
   const sanitized: OcrProviderOptions = {};
 
   if (typeof provider.name === 'string') sanitized.name = provider.name;
-  if (provider.type === 'http' || provider.type === 'mock') sanitized.type = provider.type;
+  if (provider.type === 'http' || provider.type === 'mock' || provider.type === 'mistral') {
+    sanitized.type = provider.type;
+  }
   if (typeof provider.endpoint === 'string') sanitized.endpoint = provider.endpoint;
   if (typeof provider.api_key === 'string') sanitized.api_key = provider.api_key;
   if (typeof provider.model === 'string') sanitized.model = provider.model;
   if (typeof provider.language === 'string') sanitized.language = provider.language;
+  if (typeof provider.timeout_ms === 'number') sanitized.timeout_ms = provider.timeout_ms;
   if (provider.extras) sanitized.extras = provider.extras;
 
   return Object.keys(sanitized).length > 0 ? sanitized : undefined;
@@ -105,6 +230,10 @@ export const performOcr = async (
 
   if (provider.type === 'http') {
     return handleHttpOcr(base64Image, provider);
+  }
+
+  if (provider.type === 'mistral') {
+    return handleMistralOcr(base64Image, provider);
   }
 
   throw new Error('Unsupported OCR provider configuration.');
