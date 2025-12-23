@@ -5,6 +5,7 @@ coverage/
 .env*
 .mcp.json
 docs/sessions/
+mistral-ocr-wrapper/
 
 # VitePress
 docs/.vitepress/cache
