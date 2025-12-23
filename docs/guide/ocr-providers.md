@@ -1,264 +1,274 @@
 # OCR Providers
 
-Use OCR when a page renders as images or when embedded text is unreliable. The MCP server leans on HTTP-friendly provider wrappers so you can swap vision backends without changing client code.
+Use OCR when a page renders as images or when embedded text is unreliable. The MCP server supports multiple OCR providers with flexible configuration.
 
 ## Capabilities
 
-- `pdf_ocr_page` — renders a page to PNG (respecting `scale`) and POSTs it to your HTTP wrapper; returns OCR `text`, provider metadata, and `from_cache`.
-- `pdf_ocr_image` — reuses an embedded image (by index) without re-rendering the page; same request shape as `pdf_ocr_page`.
-- Both tools accept `provider` configs (`type: "http"`, `endpoint`, `model`, `language`, `extras`) and optionally `api_key`. Set `cache: true` to reuse responses across identical inputs.
+- `pdf_ocr_page` — Renders a page to PNG (respecting `scale`) and performs OCR; returns `text`, provider metadata, and `from_cache`.
+- `pdf_ocr_image` — OCRs an embedded image (by index) without re-rendering the page; same request shape as `pdf_ocr_page`.
+- Both tools accept `provider` configs (`type`, `api_key`, `model`, `language`, `extras`) and support caching with `cache: true`.
 
-## Architecture
+## Provider Types
 
-`pdf-reader-mcp` → lightweight HTTP wrapper → upstream vision API. The server never talks directly to cloud vision APIs; you own the wrapper so you can inject prompts, redact data, log, or mock responses. Wrappers accept a JSON body `{ image, model, language, extras }` where `image` is a base64 PNG or data URI.
+### Built-in Providers
 
-## Provider recipes (copy/paste-ready)
-
-The patterns below mirror the Option B wrapper in `OCR_BACKLOG.md`: single POST endpoint, direct vision call, and minimal plumbing. Replace the API keys and models with your own. These are docs-only examples—run them from a separate node/ts project.
-
-### Mistral Vision (simple, fast)
+#### 1. `mistral` - Mistral Vision API
+**Best for:** Semantic understanding, document classification, diagram descriptions
 
 ```typescript
-// mistral-ocr-wrapper.ts
-import express from 'express';
-import { Mistral } from '@mistralai/mistralai';
-
-const app = express();
-app.use(express.json({ limit: '50mb' }));
-const client = new Mistral({ apiKey: process.env.MISTRAL_API_KEY });
-
-app.post('/v1/ocr', async (req, res) => {
-  const { image, model, language, extras } = req.body;
-  const imageUrl = image.startsWith('data:') ? image : `data:image/png;base64,${image}`;
-  const prompt = extras?.prompt || 'Extract and transcribe all text from this image. Preserve layout and return markdown.';
-
-  try {
-    const response = await client.chat.complete({
-      model: model || 'mistral-large-2512',
-      messages: [{ role: 'user', content: [{ type: 'text', text: prompt }, { type: 'image_url', image_url: imageUrl }] }],
-      temperature: extras?.temperature ?? 0,
-      maxTokens: extras?.max_tokens ?? 4000
-    });
-
-    res.json({ text: response.choices[0].message.content, language });
-  } catch (error) {
-    res.status(500).json({ error: error.message || 'OCR processing failed' });
+{
+  type: "mistral",
+  api_key: process.env.MISTRAL_API_KEY, // or provide directly
+  model: "mistral-large-2512",           // optional, default
+  extras: {
+    prompt: "Describe this technical diagram",  // optional custom prompt
+    temperature: 0,                              // optional, default 0
+    max_tokens: 4000                             // optional, default 4000
   }
+}
+```
+
+**Features:**
+- Uses Vision-capable LLM for semantic understanding
+- Custom prompts for specific tasks
+- Good for classification and description
+- Not optimized for precise text extraction
+
+**Use cases:**
+- Document type classification
+- Diagram/chart description
+- Semantic page understanding
+- Content summarization
+
+#### 2. `mistral-ocr` - Mistral OCR API (Dedicated)
+**Best for:** Precise text extraction, tables, complex layouts
+
+```typescript
+{
+  type: "mistral-ocr",
+  api_key: process.env.MISTRAL_API_KEY, // or provide directly
+  model: "mistral-ocr-latest",           // optional, default
+  extras: {
+    tableFormat: "html" // or "markdown" (default)
+  }
+}
+```
+
+**Features:**
+- Dedicated OCR model (higher accuracy)
+- Structured table extraction (HTML or Markdown)
+- Preserves document structure and hierarchy
+- Returns markdown with formatting
+
+**Use cases:**
+- Scanned documents
+- Tables and complex layouts
+- Forms and invoices
+- Precise text extraction
+
+**Current Limitations** (see [BACKLOG.md](../../BACKLOG.md)):
+- Only returns markdown text (images, tables, hyperlinks discarded)
+- No header/footer extraction
+- No image base64 support
+- No structured annotations
+
+#### 3. `mock` - Mock Provider
+**Best for:** Testing and development
+
+```typescript
+{
+  type: "mock"
+}
+```
+
+Returns a placeholder message. Useful for testing without API costs.
+
+### Generic HTTP Provider
+
+#### 4. `http` - Custom OCR Endpoint
+**Best for:** Custom OCR services, third-party APIs
+
+```typescript
+{
+  type: "http",
+  endpoint: "https://your-ocr-service.com/v1/ocr",
+  api_key: "your-api-key",  // optional, sent as Bearer token
+  model: "custom-model",     // optional
+  language: "en",            // optional
+  extras: {                  // optional, provider-specific
+    // ... custom parameters
+  }
+}
+```
+
+**Request Format:**
+The server POSTs this JSON to your endpoint:
+```json
+{
+  "image": "<base64 PNG or data URI>",
+  "model": "...",
+  "language": "...",
+  "extras": { ... }
+}
+```
+
+**Expected Response:**
+```json
+{
+  "text": "<extracted text>",
+  "ocr": "<alternative text field>" // fallback
+}
+```
+
+**Use cases:**
+- Custom OCR services
+- Third-party OCR APIs
+- Self-hosted OCR solutions
+- Legacy systems integration
+
+## Configuration Examples
+
+### Mistral Vision (Semantic Understanding)
+
+```typescript
+const result = await client.tools.pdf_ocr_page({
+  source: { path: "diagram.pdf" },
+  page: 1,
+  provider: {
+    type: "mistral",
+    api_key: process.env.MISTRAL_API_KEY,
+    extras: {
+      prompt: "Analyze this timing diagram and describe the signal flow"
+    }
+  },
+  scale: 1.5,
+  cache: true
 });
-
-app.listen(3000, () => console.log('Mistral OCR wrapper on http://localhost:3000'));
 ```
 
-**Setup**
-
-```bash
-npm init -y
-npm install express @mistralai/mistralai dotenv
-echo "MISTRAL_API_KEY=sk-..." > .env
-npx tsx mistral-ocr-wrapper.ts
-```
-
-**Provider config**
-
-```json
-{
-  "type": "http",
-  "endpoint": "http://localhost:3000/v1/ocr",
-  "model": "mistral-large-2512",
-  "language": "en",
-  "extras": { "prompt": "Preserve tables; return markdown", "temperature": 0 }
-}
-```
-
-### Mistral OCR API (Dedicated - Best Quality)
-
-The dedicated Mistral OCR API provides superior quality for complex layouts, tables, and technical documents without building your own wrapper.
-
-**Mistral Vision vs. Mistral OCR**:
-- Vision (`type: "mistral"`) — fast, simple, chat-based, best for quick extraction.
-- OCR (`type: "mistral-ocr"`) — best quality, structured output, and specialized OCR model (3 API calls: upload → process → cleanup).
-
-**Trade-offs vs. Vision API**:
-- ✅ Dedicated OCR model (`mistral-ocr-latest`)
-- ✅ Structured output (markdown, tables, hyperlinks)
-- ✅ Better accuracy for complex layouts
-- ⚠️ Higher latency (3 API calls vs. 1)
-- ⚠️ More setup (direct API key, optional extras)
-
-**Provider config**:
-
-```json
-{
-  "type": "mistral-ocr",
-  "model": "mistral-ocr-latest",
-  "api_key": "sk-...",
-  "extras": {
-    "tableFormat": "markdown",
-    "extractHeader": true,
-    "extractFooter": true
-  }
-}
-```
-
-**Example usage**:
-
-```json
-{
-  "source": { "path": "./docs/report.pdf" },
-  "page": 5,
-  "provider": {
-    "type": "mistral-ocr",
-    "model": "mistral-ocr-latest",
-    "api_key": "sk-...",
-    "extras": { "tableFormat": "markdown" }
-  }
-}
-```
-
-**When to use**:
-- Complex tables and layouts
-- Technical diagrams with labels
-- Documents requiring high accuracy
-- When structure extraction matters
-
-**When to use Vision instead**:
-- Simple text extraction
-- Speed is critical
-- Lower cost requirements
-
-### OpenAI Vision (similar pattern)
+### Mistral OCR (Precise Extraction)
 
 ```typescript
-// openai-ocr-wrapper.ts
-import express from 'express';
-import OpenAI from 'openai';
-
-const app = express();
-app.use(express.json({ limit: '50mb' }));
-const client = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
-
-app.post('/v1/ocr', async (req, res) => {
-  const { image, model, language, extras } = req.body;
-  const imageUrl = image.startsWith('data:') ? image : `data:image/png;base64,${image}`;
-  const prompt = extras?.prompt || 'Extract all text; keep headings, lists, and tables; return markdown.';
-
-  try {
-    const completion = await client.chat.completions.create({
-      model: model || 'gpt-4o-mini',
-      messages: [{ role: 'user', content: [{ type: 'text', text: prompt }, { type: 'image_url', image_url: { url: imageUrl } }] }],
-      temperature: extras?.temperature ?? 0,
-      max_tokens: extras?.max_tokens ?? 4000
-    });
-
-    res.json({ text: completion.choices[0].message.content, language });
-  } catch (error) {
-    res.status(500).json({ error: error.message || 'OCR processing failed' });
-  }
+const result = await client.tools.pdf_ocr_page({
+  source: { path: "invoice.pdf" },
+  page: 1,
+  provider: {
+    type: "mistral-ocr",
+    api_key: process.env.MISTRAL_API_KEY,
+    extras: {
+      tableFormat: "html"  // Extract tables as HTML
+    }
+  },
+  scale: 2.0,  // Higher scale for better accuracy
+  cache: true
 });
-
-app.listen(3001, () => console.log('OpenAI OCR wrapper on http://localhost:3001'));
 ```
 
-**Setup**
+### Environment Variables
 
+If you don't provide `api_key` in the provider config, the server looks for:
+- `MISTRAL_API_KEY` for `mistral` and `mistral-ocr` providers
+
+Add to your `.env` file:
 ```bash
-npm init -y
-npm install express openai dotenv
-echo "OPENAI_API_KEY=sk-..." > .env
-npx tsx openai-ocr-wrapper.ts
+MISTRAL_API_KEY=your-api-key-here
 ```
 
-**Provider config**
+## Smart OCR Decision
 
-```json
-{
-  "type": "http",
-  "endpoint": "http://localhost:3001/v1/ocr",
-  "model": "gpt-4o-mini",
-  "language": "en"
-}
-```
-
-### Google Cloud Vision (brief JSON wrapper)
+The server includes a Smart OCR feature (opt-in) that automatically decides whether OCR is needed:
 
 ```typescript
-// gcv-ocr-wrapper.ts
-import express from 'express';
-import vision from '@google-cloud/vision';
-
-const app = express();
-app.use(express.json({ limit: '50mb' }));
-const client = new vision.ImageAnnotatorClient();
-
-app.post('/v1/ocr', async (req, res) => {
-  const { image, language } = req.body;
-  const imageContent = image.startsWith('data:') ? image.split(',')[1] : image;
-
-  try {
-    const [result] = await client.documentTextDetection({ image: { content: imageContent } });
-    const text = result.fullTextAnnotation?.text || '';
-    res.json({ text, language });
-  } catch (error) {
-    res.status(500).json({ error: error.message || 'OCR processing failed' });
-  }
+const result = await client.tools.pdf_ocr_page({
+  source: { path: "document.pdf" },
+  page: 1,
+  provider: { type: "mistral-ocr" },
+  smart_ocr: true  // Enable smart decision
 });
-
-app.listen(3002, () => console.log('GCV OCR wrapper on http://localhost:3002'));
 ```
 
-**Setup**
+**Heuristics:**
+- Text length analysis
+- Non-ASCII ratio check
+- Image-to-text ratio
+- Decision cached per page
 
-```bash
-npm init -y
-npm install express @google-cloud/vision dotenv
-# Set GOOGLE_APPLICATION_CREDENTIALS=/path/to/service-account.json
-npx tsx gcv-ocr-wrapper.ts
-```
+**Benefits:**
+- Saves API costs (skip OCR on text-heavy pages)
+- Faster processing
+- Consistent decisions (cached)
 
-**Provider config**
+See [3-Stage OCR Workflow](./three-stage-ocr-workflow.md) for advanced usage patterns.
 
-```json
-{
-  "type": "http",
-  "endpoint": "http://localhost:3002/v1/ocr",
-  "language": "en"
-}
-```
+## Caching
 
-## Environment variables
-
-- `MISTRAL_API_KEY`, `OPENAI_API_KEY` — required for their wrappers.
-- `GOOGLE_APPLICATION_CREDENTIALS` — path to a service account JSON with Vision scope.
-- Optional: `PROXY`, `HTTPS_PROXY` if wrappers run behind egress controls.
-
-Load keys via `.env` in wrapper projects; the MCP server does not read them directly when calling `type: "http"` providers.
-
-## Testing with a mock provider
-
-Use a no-network stub to validate end-to-end OCR flows:
+OCR results are cached using document fingerprint + page number + provider configuration:
 
 ```typescript
-// mock-ocr-wrapper.ts
-import express from 'express';
-const app = express();
-app.use(express.json({ limit: '5mb' }));
-app.post('/v1/ocr', (req, res) => res.json({ text: `MOCK TEXT for page/image`, language: req.body.language || 'en' }));
-app.listen(3999, () => console.log('Mock OCR wrapper on http://localhost:3999'));
+// First call - API request
+const result1 = await pdf_ocr_page({
+  source: { path: "doc.pdf" },
+  page: 1,
+  provider: { type: "mistral-ocr" },
+  cache: true
+});
+// result1.data.from_cache === false
+
+// Second call - cache hit
+const result2 = await pdf_ocr_page({
+  source: { path: "doc.pdf" },
+  page: 1,
+  provider: { type: "mistral-ocr" },
+  cache: true
+});
+// result2.data.from_cache === true
 ```
 
-Point `provider.endpoint` to `http://localhost:3999/v1/ocr` and run `pdf_ocr_page` to confirm request shape, cache keys, and error handling without consuming API quota.
+**Cache Management:**
+```typescript
+// View cache stats
+await client.tools.pdf_cache_stats();
+
+// Clear OCR cache
+await client.tools.pdf_cache_clear({ scope: "ocr" });
+
+// Clear all caches
+await client.tools.pdf_cache_clear({ scope: "all" });
+```
+
+## Provider Comparison
+
+| Feature | `mistral` (Vision) | `mistral-ocr` (OCR) | `http` (Custom) |
+|---------|-------------------|---------------------|-----------------|
+| **Speed** | Medium | Medium | Varies |
+| **Accuracy** | Good (semantic) | Excellent (text) | Varies |
+| **Tables** | Basic | Excellent (HTML/MD) | Varies |
+| **Diagrams** | Description | Text only | Varies |
+| **Cost** | Higher | Lower | Varies |
+| **Best for** | Understanding | Extraction | Custom needs |
 
 ## Troubleshooting
 
-- HTTP 401/403: confirm API keys and that the wrapper forwards `Authorization` if your upstream expects it.
-- Empty or partial text: increase render `scale` (e.g., 1.5–2.0) or raise `max_tokens` in `extras`.
-- Mixed languages: set `language` or include a hint in `extras.prompt`.
-- Timeouts: wrappers should set generous `express.json` limits and upstream timeouts; large pages can exceed 10s on some providers.
-- Wrong endpoint: verify the MCP server can reach `http://localhost:PORT`; Docker/WSL may need `0.0.0.0` binding.
+### "Mistral OCR provider requires MISTRAL_API_KEY"
+- Set `MISTRAL_API_KEY` in `.env` file, or
+- Pass `api_key` directly in provider config
 
-## Cache behavior
+### "OCR provider response missing text field"
+- For `http` provider: ensure your endpoint returns `{"text": "..."}` or `{"ocr": "..."}`
 
-- OCR caches are keyed by source fingerprint, page/index, scale (for `pdf_ocr_page`), provider endpoint, model, language, and `extras`.
-- `cache: true` reuses prior responses and skips provider calls; `cache: false` forces a fresh request and updates the cache.
-- Manage caches with `pdf_cache_stats` (inspect keys/counts) and `pdf_cache_clear` (`scope: "ocr"` or `"all"`).
-- When wrappers change prompts or models, bump `extras.prompt` or `model` to avoid stale responses.
+### Poor OCR Quality
+- Increase `scale` parameter (try 2.0 or 2.5)
+- Use `mistral-ocr` instead of `mistral` for text extraction
+- Check if page has native text (use `pdf_read_pages` first)
+
+### Cache Not Working
+- Ensure `cache: true` is set
+- Different provider configs create separate cache entries
+- Use `pdf_cache_stats` to inspect cache
+
+## Related Documentation
+
+- [3-Stage OCR Workflow](./three-stage-ocr-workflow.md) - Recommended workflow
+- [Mistral OCR Capabilities](./mistral-ocr-capabilities.md) - Full API reference
+- [Getting Started](./getting-started.md) - Basic usage
+- [BACKLOG.md](../../BACKLOG.md) - Planned enhancements
