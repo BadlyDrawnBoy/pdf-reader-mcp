@@ -66,6 +66,28 @@ interface OcrResult {
 const DEFAULT_OCR_TIMEOUT_MS = 15000;
 const DEFAULT_MISTRAL_ENDPOINT = 'https://api.mistral.ai/v1/chat/completions';
 
+/**
+ * Creates a default OCR provider from environment variables.
+ * Priority: MISTRAL_API_KEY → mock provider
+ */
+const getDefaultProvider = (): OcrProviderOptions => {
+  const mistralKey = process.env.MISTRAL_API_KEY;
+
+  if (mistralKey) {
+    return {
+      type: 'mistral-ocr',
+      api_key: mistralKey,
+      name: 'mistral-ocr-default',
+    };
+  }
+
+  // No API key available - use mock provider
+  return {
+    type: 'mock',
+    name: 'mock-default',
+  };
+};
+
 const resolveTimeoutMs = (provider?: OcrProviderOptions): number =>
   provider?.timeout_ms && provider.timeout_ms > 0 ? provider.timeout_ms : DEFAULT_OCR_TIMEOUT_MS;
 
@@ -350,20 +372,23 @@ export const performOcr = async (
   base64Image: string,
   provider?: OcrProviderOptions
 ): Promise<OcrResult> => {
-  if (!provider || provider.type === 'mock') {
-    return handleMockOcr(provider);
+  // Use default provider from env if none provided
+  const resolvedProvider = provider ?? getDefaultProvider();
+
+  if (!resolvedProvider || resolvedProvider.type === 'mock') {
+    return handleMockOcr(resolvedProvider);
   }
 
-  if (provider.type === 'http') {
-    return handleHttpOcr(base64Image, provider);
+  if (resolvedProvider.type === 'http') {
+    return handleHttpOcr(base64Image, resolvedProvider);
   }
 
-  if (provider.type === 'mistral') {
-    return handleMistralOcr(base64Image, provider);
+  if (resolvedProvider.type === 'mistral') {
+    return handleMistralOcr(base64Image, resolvedProvider);
   }
 
-  if (provider.type === 'mistral-ocr') {
-    return handleMistralOcrDedicated(base64Image, provider);
+  if (resolvedProvider.type === 'mistral-ocr') {
+    return handleMistralOcrDedicated(base64Image, resolvedProvider);
   }
 
   throw new Error('Unsupported OCR provider configuration.');
