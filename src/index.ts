@@ -1,5 +1,18 @@
 #!/usr/bin/env node
 
+// Filter out DOMMatrix polyfill warnings from stdout (breaks MCP JSON)
+// These warnings come from @napi-rs/canvas native module
+const originalStdoutWrite = process.stdout.write.bind(process.stdout);
+process.stdout.write = ((chunk: any, encoding?: any, callback?: any) => {
+  const str = chunk.toString();
+  // Skip DOMMatrix warnings - redirect to stderr instead
+  if (str.includes('Cannot polyfill') || str.includes('DOMMatrix')) {
+    process.stderr.write(chunk, encoding as BufferEncoding, callback);
+    return true;
+  }
+  return originalStdoutWrite(chunk, encoding, callback);
+}) as typeof process.stdout.write;
+
 // Load environment variables from .env file
 import 'dotenv/config';
 

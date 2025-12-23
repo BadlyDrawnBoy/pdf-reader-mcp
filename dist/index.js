@@ -3115,6 +3115,15 @@ var pdfSearch = tool12().description("Searches PDF pages with plain text or rege
 });
 
 // src/index.ts
+var originalStdoutWrite = process.stdout.write.bind(process.stdout);
+process.stdout.write = (chunk, encoding, callback) => {
+  const str5 = chunk.toString();
+  if (str5.includes("Cannot polyfill") || str5.includes("DOMMatrix")) {
+    process.stderr.write(chunk, encoding, callback);
+    return true;
+  }
+  return originalStdoutWrite(chunk, encoding, callback);
+};
 var server = createServer({
   name: "pdf-reader-mcp",
   version: "2.1.0",
