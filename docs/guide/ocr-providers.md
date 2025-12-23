@@ -66,11 +66,13 @@ Use OCR when a page renders as images or when embedded text is unreliable. The M
 - Forms and invoices
 - Precise text extraction
 
-**Current Limitations** (see [BACKLOG.md](../../BACKLOG.md)):
-- Only returns markdown text (images, tables, hyperlinks discarded)
-- No header/footer extraction
-- No image base64 support
-- No structured annotations
+**Advanced Features** (v2.2.0+):
+- Full response structure (images, tables, hyperlinks, dimensions)
+- Header/footer extraction
+- Image base64 support
+- Usage tracking
+
+Enable with `extras.includeFullResponse: true` - see examples below.
 
 #### 3. `mock` - Mock Provider
 **Best for:** Testing and development
@@ -148,6 +150,7 @@ const result = await client.tools.pdf_ocr_page({
 
 ### Mistral OCR (Precise Extraction)
 
+**Basic (markdown only):**
 ```typescript
 const result = await client.tools.pdf_ocr_page({
   source: { path: "invoice.pdf" },
@@ -162,6 +165,37 @@ const result = await client.tools.pdf_ocr_page({
   scale: 2.0,  // Higher scale for better accuracy
   cache: true
 });
+
+// result.data.text contains markdown
+```
+
+**Full Response (images, tables, usage):**
+```typescript
+const result = await client.tools.pdf_ocr_page({
+  source: { path: "technical-doc.pdf" },
+  page: 5,
+  provider: {
+    type: "mistral-ocr",
+    api_key: process.env.MISTRAL_API_KEY,
+    extras: {
+      tableFormat: "html",
+      includeFullResponse: true,    // Get full response
+      includeImageBase64: true,     // Include image data
+      extractHeader: true,          // Separate headers
+      extractFooter: true           // Separate footers
+    }
+  },
+  scale: 2.0,
+  cache: true
+});
+
+// Access structured data
+const page = result.data.pages[0];
+console.log("Text:", page.markdown);
+console.log("Images:", page.images);  // [{bbox, width, height, base64}]
+console.log("Tables:", page.tables);  // [{html, bbox}]
+console.log("Links:", page.hyperlinks);
+console.log("Usage:", result.data.usage_info.total_tokens);
 ```
 
 ### Environment Variables
