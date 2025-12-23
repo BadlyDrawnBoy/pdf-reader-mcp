@@ -281,7 +281,7 @@ const executeOcrPage = async (input: {
 
 export const pdfOcrPage = tool()
   .description(
-    'Perform OCR on a rendered PDF page with optional provider configuration and caching.'
+    'Perform OCR on a rendered PDF page. Provider defaults to Mistral OCR if MISTRAL_API_KEY is set in environment, otherwise uses mock provider. Override with explicit provider parameter.'
   )
   .input(ocrPageArgsSchema)
   .handler(async ({ input }) => {

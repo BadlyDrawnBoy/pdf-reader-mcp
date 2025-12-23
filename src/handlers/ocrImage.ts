@@ -162,7 +162,9 @@ const executeOcrImage = async (input: {
 };
 
 export const pdfOcrImage = tool()
-  .description('Perform OCR on a specific image from a PDF page with caching support.')
+  .description(
+    'Perform OCR on a specific image from a PDF page. Provider defaults to Mistral OCR if MISTRAL_API_KEY is set in environment, otherwise uses mock provider. Override with explicit provider parameter.'
+  )
   .input(ocrImageArgsSchema)
   .handler(async ({ input }) => {
     const { source, provider, cache, page, index } = input;

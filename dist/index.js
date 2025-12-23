@@ -1686,6 +1686,20 @@ var getDocumentFingerprint = (pdfDocument, sourceDescription) => {
 import { Mistral } from "@mistralai/mistralai";
 var DEFAULT_OCR_TIMEOUT_MS = 15000;
 var DEFAULT_MISTRAL_ENDPOINT = "https://api.mistral.ai/v1/chat/completions";
+var getDefaultProvider = () => {
+  const mistralKey = process.env.MISTRAL_API_KEY;
+  if (mistralKey) {
+    return {
+      type: "mistral-ocr",
+      api_key: mistralKey,
+      name: "mistral-ocr-default"
+    };
+  }
+  return {
+    type: "mock",
+    name: "mock-default"
+  };
+};
 var resolveTimeoutMs = (provider) => provider?.timeout_ms && provider.timeout_ms > 0 ? provider.timeout_ms : DEFAULT_OCR_TIMEOUT_MS;
 var fetchWithTimeout = async (url, init, timeoutMs) => {
   const controller = new AbortController;
@@ -1882,17 +1896,18 @@ var sanitizeProviderOptions = (provider) => {
   return Object.keys(sanitized).length > 0 ? sanitized : undefined;
 };
 var performOcr = async (base64Image, provider) => {
-  if (!provider || provider.type === "mock") {
-    return handleMockOcr(provider);
+  const resolvedProvider = provider ?? getDefaultProvider();
+  if (!resolvedProvider || resolvedProvider.type === "mock") {
+    return handleMockOcr(resolvedProvider);
   }
-  if (provider.type === "http") {
-    return handleHttpOcr(base64Image, provider);
+  if (resolvedProvider.type === "http") {
+    return handleHttpOcr(base64Image, resolvedProvider);
   }
-  if (provider.type === "mistral") {
-    return handleMistralOcr(base64Image, provider);
+  if (resolvedProvider.type === "mistral") {
+    return handleMistralOcr(base64Image, resolvedProvider);
   }
-  if (provider.type === "mistral-ocr") {
-    return handleMistralOcrDedicated(base64Image, provider);
+  if (resolvedProvider.type === "mistral-ocr") {
+    return handleMistralOcrDedicated(base64Image, resolvedProvider);
   }
   throw new Error("Unsupported OCR provider configuration.");
 };
@@ -1977,7 +1992,7 @@ var executeOcrImage = async (input) => {
     return toolError7(`Failed to OCR image from ${sourceDescription}. Reason: ${message}`);
   }
 };
-var pdfOcrImage = tool7().description("Perform OCR on a specific image from a PDF page with caching support.").input(ocrImageArgsSchema).handler(async ({ input }) => {
+var pdfOcrImage = tool7().description("Perform OCR on a specific image from a PDF page. Provider defaults to Mistral OCR if MISTRAL_API_KEY is set in environment, otherwise uses mock provider. Override with explicit provider parameter.").input(ocrImageArgsSchema).handler(async ({ input }) => {
   const { source, provider, cache, page, index } = input;
   const sourceArgs = {
     ...source.path ? { path: source.path } : {},
@@ -2237,7 +2252,7 @@ var executeOcrPage = async (input) => {
     return toolError8(`Failed to OCR page from ${sourceDescription}. Reason: ${message}`);
   }
 };
-var pdfOcrPage = tool8().description("Perform OCR on a rendered PDF page with optional provider configuration and caching.").input(ocrPageArgsSchema).handler(async ({ input }) => {
+var pdfOcrPage = tool8().description("Perform OCR on a rendered PDF page. Provider defaults to Mistral OCR if MISTRAL_API_KEY is set in environment, otherwise uses mock provider. Override with explicit provider parameter.").input(ocrPageArgsSchema).handler(async ({ input }) => {
   const { source, provider, cache, page, scale, smart_ocr: smartOcr } = input;
   const sourceArgs = {
     ...source.path ? { path: source.path } : {},
