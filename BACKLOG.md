@@ -58,32 +58,32 @@ const result = await client.tools.pdf_read_pages({
 
 ### High Priority
 
-#### 1. Enhanced Mistral OCR Integration
-**Estimated effort:** Medium (2-3 days)
+#### ~~1. Enhanced Mistral OCR Integration~~ ✅ COMPLETED (v2.2.0)
+**Completed:** 2025-12-23
 
-Enhance `mistral-ocr` provider to expose full API capabilities:
+Enhanced `mistral-ocr` provider to expose full API capabilities:
 
-- [ ] Return full response structure (not just markdown)
-  - [ ] Images array with bboxes and optional base64
-  - [ ] Tables array with HTML/markdown
-  - [ ] Hyperlinks array
-  - [ ] Header/footer when extracted
-  - [ ] Page dimensions
-  - [ ] Usage info
-- [ ] Support additional parameters via `extras`:
-  - [ ] `extractHeader: boolean`
-  - [ ] `extractFooter: boolean`
-  - [ ] `includeImageBase64: boolean`
-  - [ ] `includeFullResponse: boolean` (opt-in for backward compatibility)
-- [ ] Support direct URL input (avoid upload when possible)
+- [x] Return full response structure (not just markdown)
+  - [x] Images array with bboxes and optional base64
+  - [x] Tables array with HTML/markdown
+  - [x] Hyperlinks array
+  - [x] Header/footer when extracted
+  - [x] Page dimensions
+  - [x] Usage info
+- [x] Support additional parameters via `extras`:
+  - [x] `extractHeader: boolean`
+  - [x] `extractFooter: boolean`
+  - [x] `includeImageBase64: boolean`
+  - [x] `includeFullResponse: boolean` (opt-in for backward compatibility)
+- [ ] Support direct URL input (avoid upload when possible) - **DEFERRED**
   - [ ] `document_url` for public PDFs
   - [ ] `image_url` for public images
 
-**Files to modify:**
-- `src/utils/ocr.ts` - Enhance `handleMistralOcrDedicated()`
-- `src/schemas/ocr.ts` - Add new parameters
-- `src/types/pdf.ts` - Define full response types
-- `docs/guide/ocr-providers.md` - Document new capabilities
+**Files modified:**
+- ✅ `src/utils/ocr.ts` - Enhanced `handleMistralOcrDedicated()`
+- ✅ `src/schemas/ocr.ts` - Documented new parameters
+- ✅ `docs/guide/ocr-providers.md` - Added examples
+- ✅ `docs/guide/mistral-ocr-capabilities.md` - Full usage guide
 
 #### 2. Smart OCR Workflow Enhancement
 **Estimated effort:** Small (1 day)
@@ -254,6 +254,13 @@ Improve OCR output quality:
 ## Completed Features
 
 ### December 2025
+
+- ✅ **Enhanced Mistral OCR Integration** (2025-12-23) **NEW!**
+  - Full response structure (images, tables, hyperlinks, dimensions)
+  - Header/footer extraction
+  - Image base64 support
+  - Usage tracking
+  - Backward compatible (opt-in via `includeFullResponse`)
 
 - ✅ **PDF Rendering Fix** (2025-12-22)
   - Downgraded pdfjs-dist to 4.4.168

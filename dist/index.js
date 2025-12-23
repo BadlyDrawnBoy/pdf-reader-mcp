@@ -1,6 +1,15 @@
 #!/usr/bin/env node
 
 // src/index.ts
+import"dotenv/config";
+
+// src/pdf/polyfills.ts
+import { Canvas, Image, Path2D } from "@napi-rs/canvas";
+global.Canvas = Canvas;
+global.Image = Image;
+global.Path2D = Path2D;
+
+// src/index.ts
 import { createServer, stdio } from "@sylphx/mcp-server-sdk";
 
 // src/handlers/cache.ts
@@ -691,6 +700,31 @@ import fs from "node:fs/promises";
 import { createRequire } from "node:module";
 import { getDocument } from "pdfjs-dist/legacy/build/pdf.mjs";
 
+// src/pdf/canvasFactory.ts
+import { createCanvas } from "@napi-rs/canvas";
+
+class NodeCanvasFactory {
+  create(width, height) {
+    const safeWidth = Math.floor(Math.max(1, width));
+    const safeHeight = Math.floor(Math.max(1, height));
+    const canvas = createCanvas(safeWidth, safeHeight);
+    const context = canvas.getContext("2d");
+    return { canvas, context };
+  }
+  reset(canvasAndContext, width, height) {
+    const safeWidth = Math.floor(Math.max(1, width));
+    const safeHeight = Math.floor(Math.max(1, height));
+    canvasAndContext.canvas.width = safeWidth;
+    canvasAndContext.canvas.height = safeHeight;
+  }
+  destroy(canvasAndContext) {
+    canvasAndContext.canvas.width = 0;
+    canvasAndContext.canvas.height = 0;
+    canvasAndContext.canvas = null;
+    canvasAndContext.context = null;
+  }
+}
+
 // src/utils/pathUtils.ts
 import path from "node:path";
 var PROJECT_ROOT = process.cwd();
@@ -882,10 +916,12 @@ var loadPdfDocument = async (source, sourceDescription, options = {}) => {
     }
     throw new PdfError(errorCode, `Failed to prepare PDF source ${sourceDescription}. Reason: ${message}`, { cause: err instanceof Error ? err : undefined });
   }
+  const canvasFactory = new NodeCanvasFactory;
   const loadingTask = getDocument({
     data: pdfDataSource,
     cMapUrl: CMAP_URL,
-    cMapPacked: true
+    cMapPacked: true,
+    canvasFactory
   });
   try {
     return await loadingTask.promise;
@@ -1387,7 +1423,7 @@ var ocrProviderSchema = object8({
   model: optional6(str3(description7("Model name or identifier."))),
   language: optional6(str3(description7("Preferred language for OCR."))),
   timeout_ms: optional6(num3(gte3(1), description7("Timeout in milliseconds for OCR requests."))),
-  extras: optional6(record(str3(), str3(), description7("Additional provider-specific options.")))
+  extras: optional6(record(str3(), str3(), description7("Additional provider-specific options. Mistral OCR supports: tableFormat (html|markdown), includeFullResponse (boolean), includeImageBase64 (boolean), extractHeader (boolean), extractFooter (boolean).")))
 });
 var ocrPageArgsSchema = object8({
   source: pdfSourceSchema,
@@ -1770,6 +1806,10 @@ var handleMistralOcrDedicated = async (base64Image, provider) => {
   const payload = base64Image.startsWith("data:") ? base64Image.split(",")[1] ?? "" : base64Image;
   const buffer = Buffer.from(payload, "base64");
   const tableFormat = provider.extras && typeof provider.extras["tableFormat"] === "string" ? provider.extras["tableFormat"] : "markdown";
+  const includeFullResponse = provider.extras && typeof provider.extras["includeFullResponse"] === "boolean" ? provider.extras["includeFullResponse"] : false;
+  const includeImageBase64 = provider.extras && typeof provider.extras["includeImageBase64"] === "boolean" ? provider.extras["includeImageBase64"] : false;
+  const extractHeader = provider.extras && typeof provider.extras["extractHeader"] === "boolean" ? provider.extras["extractHeader"] : false;
+  const extractFooter = provider.extras && typeof provider.extras["extractFooter"] === "boolean" ? provider.extras["extractFooter"] : false;
   let uploadedId;
   try {
     const uploaded = await client.files.upload({
@@ -1780,16 +1820,28 @@ var handleMistralOcrDedicated = async (base64Image, provider) => {
     const result = await client.ocr.process({
       model: provider.model ?? "mistral-ocr-latest",
       document: { fileId: uploadedId },
-      tableFormat
+      tableFormat,
+      ...includeImageBase64 ? { includeImageBase64 } : {},
+      ...extractHeader ? { extractHeader } : {},
+      ...extractFooter ? { extractFooter } : {}
     });
     const text7 = result.pages?.[0]?.markdown;
     if (!text7) {
       throw new Error("Mistral OCR response missing text field.");
     }
-    return {
+    const basicResponse = {
       provider: provider.name ?? "mistral-ocr",
       text: text7
     };
+    if (includeFullResponse) {
+      return {
+        ...basicResponse,
+        pages: result.pages,
+        model: result.model,
+        usage_info: result.usage_info
+      };
+    }
+    return basicResponse;
   } finally {
     if (uploadedId) {
       try {
@@ -1940,51 +1992,69 @@ import { text as text8, tool as tool8, toolError as toolError8 } from "@sylphx/m
 import { OPS as OPS2 } from "pdfjs-dist/legacy/build/pdf.mjs";
 
 // src/pdf/render.ts
-import { createCanvas } from "canvas";
+import fs3 from "node:fs/promises";
 var logger13 = createLogger("Renderer");
+var DEBUG_LOG_PATH = "/tmp/pdf-render-debug.log";
+async function debugLog(message, data) {
+  const timestamp = new Date().toISOString();
+  const logEntry = `[${timestamp}] ${message}
+${data ? JSON.stringify(data, null, 2) : ""}
 
-class NodeCanvasFactory {
-  create(width, height) {
-    const safeWidth = Math.ceil(width);
-    const safeHeight = Math.ceil(height);
-    const canvas = createCanvas(safeWidth, safeHeight);
-    const context = canvas.getContext("2d");
-    if (!context) {
-      throw new Error("Failed to create canvas rendering context");
-    }
-    return { canvas, context };
-  }
-  destroy(canvasAndContext) {
-    canvasAndContext.canvas.width = 0;
-    canvasAndContext.canvas.height = 0;
-  }
+`;
+  await fs3.appendFile(DEBUG_LOG_PATH, logEntry).catch(() => {});
 }
 var renderPageToPng = async (pdfDocument, pageNum, scale = 1.5) => {
-  const page = await pdfDocument.getPage(pageNum);
-  const viewport = page.getViewport({ scale });
-  const canvasFactory = new NodeCanvasFactory;
-  const { canvas, context } = canvasFactory.create(viewport.width, viewport.height);
-  const renderContext = {
-    canvasContext: context,
-    canvas: null,
-    viewport,
-    canvasFactory
-  };
+  await debugLog("=== START renderPageToPng ===", { pageNum, scale });
   try {
-    await page.render(renderContext).promise;
+    await debugLog("Getting page from document");
+    const page = await pdfDocument.getPage(pageNum);
+    await debugLog("Getting viewport");
+    const viewport = page.getViewport({ scale });
+    await debugLog("Viewport created", { width: viewport.width, height: viewport.height });
+    await debugLog("Creating canvas factory");
+    const canvasFactory = new NodeCanvasFactory;
+    await debugLog("Creating canvas");
+    const { canvas, context } = canvasFactory.create(viewport.width, viewport.height);
+    await debugLog("Canvas created", {
+      canvasWidth: canvas.width,
+      canvasHeight: canvas.height,
+      contextType: typeof context
+    });
+    const renderContext = {
+      canvasContext: context,
+      viewport,
+      canvasFactory
+    };
+    await debugLog("Starting page.render()");
+    try {
+      await page.render(renderContext).promise;
+      await debugLog("page.render() completed successfully");
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      const stack = error instanceof Error ? error.stack : undefined;
+      await debugLog("ERROR in page.render()", { message, stack, error });
+      logger13.error("Error rendering page", { pageNum, error: message });
+      throw error;
+    }
+    await debugLog("Encoding canvas to PNG");
+    const pngBuffer = await canvas.encode("png");
+    await debugLog("PNG encoding completed", { bufferLength: pngBuffer.length });
+    canvasFactory.destroy({ canvas, context });
+    await debugLog("Canvas destroyed");
+    const result = {
+      width: Math.ceil(viewport.width),
+      height: Math.ceil(viewport.height),
+      scale,
+      data: pngBuffer.toString("base64")
+    };
+    await debugLog("=== END renderPageToPng SUCCESS ===");
+    return result;
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
-    logger13.error("Error rendering page", { pageNum, error: message });
+    const stack = error instanceof Error ? error.stack : undefined;
+    await debugLog("=== END renderPageToPng ERROR ===", { message, stack, error });
     throw error;
   }
-  const pngBuffer = canvas.toBuffer("image/png");
-  canvasFactory.destroy({ canvas, context });
-  return {
-    width: Math.ceil(viewport.width),
-    height: Math.ceil(viewport.height),
-    scale,
-    data: pngBuffer.toString("base64")
-  };
 };
 
 // src/handlers/ocrPage.ts

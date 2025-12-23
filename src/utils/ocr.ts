@@ -22,9 +22,45 @@ export type LooseOcrProviderOptions = {
   extras?: Record<string, unknown> | undefined;
 };
 
+interface MistralOcrImage {
+  bbox?: [number, number, number, number];
+  width?: number;
+  height?: number;
+  base64?: string;
+}
+
+interface MistralOcrTable {
+  html?: string;
+  bbox?: [number, number, number, number];
+}
+
+interface MistralOcrPage {
+  index: number;
+  markdown: string;
+  images?: MistralOcrImage[];
+  tables?: MistralOcrTable[];
+  hyperlinks?: string[];
+  header?: string | null;
+  footer?: string | null;
+  dimensions?: {
+    width: number;
+    height: number;
+  };
+}
+
+interface MistralOcrUsageInfo {
+  prompt_tokens?: number;
+  completion_tokens?: number;
+  total_tokens?: number;
+}
+
 interface OcrResult {
   provider: string;
   text: string;
+  // Optional full response fields (Mistral OCR only)
+  pages?: MistralOcrPage[];
+  model?: string;
+  usage_info?: MistralOcrUsageInfo;
 }
 
 const DEFAULT_OCR_TIMEOUT_MS = 15000;
@@ -218,6 +254,22 @@ const handleMistralOcrDedicated = async (
     provider.extras && typeof provider.extras['tableFormat'] === 'string'
       ? provider.extras['tableFormat']
       : 'markdown';
+  const includeFullResponse =
+    provider.extras && typeof provider.extras['includeFullResponse'] === 'boolean'
+      ? provider.extras['includeFullResponse']
+      : false;
+  const includeImageBase64 =
+    provider.extras && typeof provider.extras['includeImageBase64'] === 'boolean'
+      ? provider.extras['includeImageBase64']
+      : false;
+  const extractHeader =
+    provider.extras && typeof provider.extras['extractHeader'] === 'boolean'
+      ? provider.extras['extractHeader']
+      : false;
+  const extractFooter =
+    provider.extras && typeof provider.extras['extractFooter'] === 'boolean'
+      ? provider.extras['extractFooter']
+      : false;
 
   let uploadedId: string | undefined;
 
@@ -232,6 +284,9 @@ const handleMistralOcrDedicated = async (
       model: provider.model ?? 'mistral-ocr-latest',
       document: { fileId: uploadedId },
       tableFormat,
+      ...(includeImageBase64 ? { includeImageBase64 } : {}),
+      ...(extractHeader ? { extractHeader } : {}),
+      ...(extractFooter ? { extractFooter } : {}),
     });
     const text = result.pages?.[0]?.markdown;
 
@@ -239,10 +294,23 @@ const handleMistralOcrDedicated = async (
       throw new Error('Mistral OCR response missing text field.');
     }
 
-    return {
+    // Basic response (backward compatible)
+    const basicResponse: OcrResult = {
       provider: provider.name ?? 'mistral-ocr',
       text,
     };
+
+    // Return full response if requested
+    if (includeFullResponse) {
+      return {
+        ...basicResponse,
+        pages: result.pages,
+        model: result.model,
+        usage_info: result.usage_info,
+      };
+    }
+
+    return basicResponse;
   } finally {
     if (uploadedId) {
       try {

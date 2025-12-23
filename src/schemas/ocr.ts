@@ -19,7 +19,15 @@ export const ocrProviderSchema = object({
   model: optional(str(description('Model name or identifier.'))),
   language: optional(str(description('Preferred language for OCR.'))),
   timeout_ms: optional(num(gte(1), description('Timeout in milliseconds for OCR requests.'))),
-  extras: optional(record(str(), str(), description('Additional provider-specific options.'))),
+  extras: optional(
+    record(
+      str(),
+      str(),
+      description(
+        'Additional provider-specific options. Mistral OCR supports: tableFormat (html|markdown), includeFullResponse (boolean), includeImageBase64 (boolean), extractHeader (boolean), extractFooter (boolean).'
+      )
+    )
+  ),
 });
 
 export const ocrPageArgsSchema = object({

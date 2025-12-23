@@ -227,21 +227,188 @@ const result = await client.ocr.process({
 
 ## Current Implementation Status
 
-### ✅ Implemented
+### ✅ Implemented (v2.2.0+)
 - `client.ocr.process()` with file upload
-- `tableFormat` parameter (via extras)
+- `tableFormat` parameter (html/markdown)
 - Upload + cleanup workflow
-- Basic markdown extraction
-
-### ❌ Not Implemented (See BACKLOG.md)
-- Full response structure (images, tables, hyperlinks, etc.)
+- **Full response structure** (opt-in via `includeFullResponse`)
 - `extractHeader` / `extractFooter` parameters
 - `includeImageBase64` parameter
+- Usage info tracking
+
+### 🔄 Partially Implemented
+- Basic markdown extraction (default, backward compatible)
+- Full response with images, tables, hyperlinks, dimensions (opt-in)
+
+### ❌ Not Yet Implemented (See BACKLOG.md)
 - `pages` parameter (multi-page in single call)
-- `documentAnnotationFormat` (structured extraction)
+- `documentAnnotationFormat` (structured extraction with Zod schemas)
 - `bboxAnnotationFormat` (bbox annotation)
 - Direct URL support (document_url, image_url)
-- Usage info tracking
+
+## Usage Examples
+
+### Basic Usage (Backward Compatible)
+
+```typescript
+const result = await client.tools.pdf_ocr_page({
+  source: { path: "document.pdf" },
+  page: 1,
+  provider: {
+    type: "mistral-ocr",
+    api_key: process.env.MISTRAL_API_KEY
+  }
+});
+
+// Response:
+{
+  provider: "mistral-ocr",
+  text: "Extracted markdown text..."
+}
+```
+
+### Full Response (New!)
+
+```typescript
+const result = await client.tools.pdf_ocr_page({
+  source: { path: "document.pdf" },
+  page: 1,
+  provider: {
+    type: "mistral-ocr",
+    api_key: process.env.MISTRAL_API_KEY,
+    extras: {
+      tableFormat: "html",
+      includeFullResponse: true,
+      includeImageBase64: true,
+      extractHeader: true,
+      extractFooter: true
+    }
+  }
+});
+
+// Response:
+{
+  provider: "mistral-ocr",
+  text: "Extracted markdown text...",
+  pages: [{
+    index: 0,
+    markdown: "Extracted markdown text...",
+    images: [{
+      bbox: [100, 200, 300, 400],
+      width: 200,
+      height: 200,
+      base64: "iVBORw0KGgoAAAANS..." // if includeImageBase64=true
+    }],
+    tables: [{
+      html: "<table>...</table>",
+      bbox: [50, 100, 500, 300]
+    }],
+    hyperlinks: ["https://example.com", "mailto:info@example.com"],
+    header: "Page Header Text",  // if extractHeader=true
+    footer: "Page 1 of 10",      // if extractFooter=true
+    dimensions: { width: 612, height: 792 }
+  }],
+  model: "mistral-ocr-latest",
+  usage_info: {
+    prompt_tokens: 150,
+    completion_tokens: 300,
+    total_tokens: 450
+  }
+}
+```
+
+### Extract Tables as HTML
+
+```typescript
+const result = await client.tools.pdf_ocr_page({
+  source: { path: "report.pdf" },
+  page: 5,
+  provider: {
+    type: "mistral-ocr",
+    extras: {
+      tableFormat: "html",
+      includeFullResponse: true
+    }
+  }
+});
+
+// Access tables
+result.data.pages[0].tables.forEach(table => {
+  console.log(table.html);  // <table>...</table>
+  console.log(table.bbox);  // [x1, y1, x2, y2]
+});
+```
+
+### Extract Headers and Footers
+
+```typescript
+const result = await client.tools.pdf_ocr_page({
+  source: { path: "document.pdf" },
+  page: 1,
+  provider: {
+    type: "mistral-ocr",
+    extras: {
+      extractHeader: true,
+      extractFooter: true,
+      includeFullResponse: true
+    }
+  }
+});
+
+// Access headers/footers separately
+const page = result.data.pages[0];
+console.log("Header:", page.header);  // "Document Title"
+console.log("Main:", page.markdown);  // Main content
+console.log("Footer:", page.footer);  // "Page 1"
+```
+
+### Get Image Metadata
+
+```typescript
+const result = await client.tools.pdf_ocr_page({
+  source: { path: "diagram.pdf" },
+  page: 1,
+  provider: {
+    type: "mistral-ocr",
+    extras: {
+      includeFullResponse: true,
+      includeImageBase64: true  // Get actual image data
+    }
+  }
+});
+
+// Access images
+result.data.pages[0].images.forEach(img => {
+  console.log(`Image at (${img.bbox[0]}, ${img.bbox[1]})`);
+  console.log(`Size: ${img.width}x${img.height}`);
+  if (img.base64) {
+    // Save or process image
+    const imgData = Buffer.from(img.base64, 'base64');
+  }
+});
+```
+
+### Track API Usage
+
+```typescript
+const result = await client.tools.pdf_ocr_page({
+  source: { path: "large-doc.pdf" },
+  page: 1,
+  provider: {
+    type: "mistral-ocr",
+    extras: {
+      includeFullResponse: true
+    }
+  }
+});
+
+// Monitor token usage
+if (result.data.usage_info) {
+  console.log(`Tokens used: ${result.data.usage_info.total_tokens}`);
+  console.log(`Prompt: ${result.data.usage_info.prompt_tokens}`);
+  console.log(`Completion: ${result.data.usage_info.completion_tokens}`);
+}
+```
 
 ## Related Documentation
 
