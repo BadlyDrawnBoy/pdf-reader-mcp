@@ -2129,49 +2129,52 @@ var performOcr = async (base64Image, provider) => {
 };
 
 // src/utils/workflow.ts
-function buildNextStep2(context) {
-  if (context.stage === "info") {
+var buildInfoStageHint = () => ({
+  suggestion: "Use pdf_read (Stage 1) to extract content, or pdf_search to find specific text.",
+  recommended_tools: ["pdf_read", "pdf_search"]
+});
+var buildReadStageHint = (context) => {
+  if (!context.hasText && !context.hasImages) {
     return {
-      suggestion: "Use pdf_read (Stage 1) to extract content, or pdf_search to find specific text.",
-      recommended_tools: ["pdf_read", "pdf_search"]
-    };
-  }
-  if (context.stage === "read") {
-    if (!context.hasText && !context.hasImages) {
-      return {
-        suggestion: "No text or images found. This may be a scanned page. Use pdf_ocr (Stage 3) to OCR the entire page.",
-        recommended_tools: ["pdf_ocr"]
-      };
-    }
-    if (context.hasImages && context.imageCount && context.imageCount > 0) {
-      return {
-        suggestion: `Found ${context.imageCount} image(s). Use pdf_extract_image (Stage 2) for diagrams/charts, or pdf_ocr (Stage 3) if images contain text.`,
-        recommended_tools: ["pdf_extract_image", "pdf_ocr"]
-      };
-    }
-    if (context.hasText) {
-      return {
-        suggestion: "Text extraction complete."
-      };
-    }
-  }
-  if (context.stage === "extract") {
-    return {
-      suggestion: "Image extracted for vision analysis. If other images contain text, use pdf_ocr (Stage 3).",
+      suggestion: "No text or images found. This may be a scanned page. Use pdf_ocr (Stage 3) to OCR the entire page.",
       recommended_tools: ["pdf_ocr"]
     };
   }
-  if (context.stage === "ocr") {
+  if (context.hasImages && context.imageCount && context.imageCount > 0) {
     return {
-      suggestion: "OCR complete. Text extracted from image."
+      suggestion: `Found ${context.imageCount} image(s). Use pdf_extract_image (Stage 2) for diagrams/charts, or pdf_ocr (Stage 3) if images contain text.`,
+      recommended_tools: ["pdf_extract_image", "pdf_ocr"]
     };
   }
-  if (context.stage === "search") {
+  if (context.hasText) {
     return {
-      suggestion: "Search complete. Use pdf_read on relevant pages for full content.",
-      recommended_tools: ["pdf_read"]
+      suggestion: "Text extraction complete."
     };
   }
+  return;
+};
+var buildExtractStageHint = () => ({
+  suggestion: "Image extracted for vision analysis. If other images contain text, use pdf_ocr (Stage 3).",
+  recommended_tools: ["pdf_ocr"]
+});
+var buildOcrStageHint = () => ({
+  suggestion: "OCR complete. Text extracted from image."
+});
+var buildSearchStageHint = () => ({
+  suggestion: "Search complete. Use pdf_read on relevant pages for full content.",
+  recommended_tools: ["pdf_read"]
+});
+function buildNextStep2(context) {
+  if (context.stage === "info")
+    return buildInfoStageHint();
+  if (context.stage === "read")
+    return buildReadStageHint(context);
+  if (context.stage === "extract")
+    return buildExtractStageHint();
+  if (context.stage === "ocr")
+    return buildOcrStageHint();
+  if (context.stage === "search")
+    return buildSearchStageHint();
   return;
 }
 
@@ -3406,7 +3409,7 @@ process.stdout.write = (chunk, encodingOrCallback, callback) => {
 };
 var server = createServer({
   name: "pdf-reader-mcp",
-  version: "2.1.0",
+  version: "3.0.0",
   instructions: "PDF toolkit for MCP clients: retrieve metadata, compute page statistics, inspect TOCs, read structured pages, search text, extract text/images, rasterize pages, perform OCR with caching, and manage caches (read_pdf maintained for compatibility).",
   tools: {
     pdf_info: pdfInfo,
