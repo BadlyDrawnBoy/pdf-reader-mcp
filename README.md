@@ -100,7 +100,8 @@ PDF Reader MCP is a **production-ready** Model Context Protocol server for AI ag
 
 - **Flexible paths** - absolute, relative, Windows/Unix
 - **Smart ordering** - Y-coordinate based content layout
-- **3-stage workflow** - text → vision → OCR
+- **Clean tool separation** - `pdf_vision` for diagrams, `pdf_ocr` for text
+- **Auto-fallback** - No API key? Falls back to image for Claude Vision
 - **Full response structure** - images, tables, hyperlinks, usage tracking
 
 ---
@@ -216,65 +217,68 @@ code --add-mcp '{"name":"pdf-reader","command":"node","args":["/absolute/path/to
 
 ```typescript
 // Stage 1: Fast text extraction with image/table markers
-const result = await tools.pdf_read_pages({
-  sources: [{ path: "report.pdf", pages: [1, 2, 3] }],
+const result = await tools.pdf_read({
+  sources: [{ path: "report.pdf", pages: "1-3" }],
   insert_markers: true,          // Add [IMAGE] and [TABLE] markers
-  include_image_indexes: true    // Get indexes for Stage 2/3
+  include_image_indexes: true    // Get indexes for Stage 2
 });
 
 // Result shows where complex content is:
-// "Introduction\n\n[IMAGE]\n\nFigure 1 shows...\n\n[TABLE]\n\nData..."
+// "Introduction\n\n[IMAGE 0: 800x600px]\n\nFigure 1 shows...\n\n[TABLE]..."
 ```
 
 ### 2. Analyze Technical Diagrams (Vision API)
 
 ```typescript
-// Stage 2: Vision API for diagrams
-const diagram = await tools.pdf_ocr_image({
+// Stage 2a: Vision API for diagrams/charts
+const diagram = await tools.pdf_vision({
   source: { path: "technical-doc.pdf" },
   page: 5,
   index: 0,  // From Stage 1 image_indexes
-  provider: {
-    type: "mistral",  // Vision API - NOT "mistral-ocr"
-    extras: {
-      prompt: "Analyze this timing diagram. Extract all signal names, voltage thresholds, and timing parameters."
-    }
-  }
 });
 
-// Result: Comprehensive analysis
-// "Signals: VDD33 (3.3V), 1.8V Core, RESET, Internal RESET
-//  Thresholds: 1.62V (VDD33/2), 3.3V, 1.8V
-//  Timing: >4T (T=XTAL cycle), 75ms delay..."
+// Automatically uses Mistral Vision if MISTRAL_API_KEY is set
+// Falls back to PNG image if no API key (for Claude Vision)
+
+// Result: Comprehensive analysis (cached!)
+// {
+//   "text": "Signals: VDD33 (3.3V), 1.8V Core, RESET...",
+//   "provider": "mistral-vision-default",
+//   "from_cache": false
+// }
 ```
 
 ### 3. Extract Text from Scanned Documents (OCR API)
 
 ```typescript
-// Stage 3: OCR API for scanned text/tables
-const invoice = await tools.pdf_ocr_page({
+// Stage 2b: OCR API for scanned text/tables
+const invoice = await tools.pdf_ocr({
   source: { path: "scanned-invoice.pdf" },
   page: 1,
-  provider: {
-    type: "mistral-ocr",  // OCR API - NOT "mistral"
-    extras: {
-      tableFormat: "html",
-      includeFullResponse: "true"
-    }
-  },
-  scale: 2.0  // Higher scale = better accuracy
 });
 
-// Result: Structured data
+// Automatically uses Mistral OCR if MISTRAL_API_KEY is set
+// Falls back to PNG image if no API key (for Claude Vision)
+
+// Result: Structured data (cached!)
 // {
-//   text: "Invoice #12345...",
-//   pages: [{
-//     markdown: "...",
-//     tables: [{ content: "<table>...</table>", format: "html" }],
-//     images: [{ id: "img-0.jpeg", topLeftX: 50, ... }],
-//     hyperlinks: ["https://..."]
-//   }]
+//   "text": "Invoice #12345...",
+//   "provider": "mistral-ocr-default",
+//   "from_cache": false
 // }
+```
+
+### 4. Optional: Extract Raw Image
+
+```typescript
+// For Claude Vision analysis (when you want full control)
+const image = await tools.pdf_extract_image({
+  source: { path: "doc.pdf" },
+  page: 5,
+  index: 0
+});
+
+// Returns PNG image for manual analysis
 ```
 
 ---
@@ -285,14 +289,14 @@ const invoice = await tools.pdf_ocr_page({
 
 ```
 Is it a diagram/chart/graphic?
-├─ YES → Use Vision API (type: "mistral")
+├─ YES → Use pdf_vision
 │   ├─ Timing diagrams ✅
 │   ├─ Flowcharts ✅
 │   ├─ Circuit diagrams ✅
 │   └─ Technical illustrations ✅
 │
 └─ NO → Is it scanned text/table/form?
-    └─ YES → Use OCR API (type: "mistral-ocr")
+    └─ YES → Use pdf_ocr
         ├─ Invoices ✅
         ├─ Forms ✅
         ├─ Scanned documents ✅
@@ -301,32 +305,27 @@ Is it a diagram/chart/graphic?
 
 ### API Comparison
 
-| Content Type | Correct API | Wrong API | Quality Difference |
+| Content Type | Correct Tool | Wrong Tool | Quality Difference |
 |--------------|-------------|-----------|-------------------|
-| **Timing Diagram** | Vision (`mistral`) | OCR (`mistral-ocr`) | 95% vs 5% |
-| **Scanned Invoice** | OCR (`mistral-ocr`) | Vision (`mistral`) | 95% vs 70% |
-| **Flowchart** | Vision (`mistral`) | OCR (`mistral-ocr`) | 95% vs 10% |
-| **Table** | OCR (`mistral-ocr`) | Vision (`mistral`) | 95% vs 75% |
+| **Timing Diagram** | `pdf_vision` | `pdf_ocr` | 95% vs 5% |
+| **Scanned Invoice** | `pdf_ocr` | `pdf_vision` | 95% vs 70% |
+| **Flowchart** | `pdf_vision` | `pdf_ocr` | 95% vs 10% |
+| **Table** | `pdf_ocr` | `pdf_vision` | 95% vs 75% |
 
 **Test Data:** See [OCR_COMPARISON_TEST.md](./OCR_COMPARISON_TEST.md) for detailed comparison.
 
 ### Examples: RIGHT vs WRONG
 
-**❌ WRONG:** OCR API for diagram
+**❌ WRONG:** OCR for diagram
 ```typescript
 // Only extracts "Voltage (V)" - useless!
-provider: { type: "mistral-ocr" }
+await tools.pdf_ocr({source: {path: "diagram.pdf"}, page: 5, index: 0})
 ```
 
-**✅ RIGHT:** Vision API for diagram
+**✅ RIGHT:** Vision for diagram
 ```typescript
 // Extracts all signals, thresholds, timing - excellent!
-provider: {
-  type: "mistral",
-  extras: {
-    prompt: "Analyze this diagram..."
-  }
-}
+await tools.pdf_vision({source: {path: "diagram.pdf"}, page: 5, index: 0})
 ```
 
 ---
@@ -424,16 +423,14 @@ provider: {
 
 | Tool | Purpose | Stage |
 |------|---------|-------|
-| `pdf_read_pages` | Extract text + markers | Stage 1 |
-| `pdf_ocr_image` | Vision/OCR on specific image | Stage 2/3 |
-| `pdf_ocr_page` | Vision/OCR on full page | Stage 2/3 |
-| `pdf_list_images` | List images in PDF | Helper |
-| `pdf_get_metadata` | Get PDF metadata | Helper |
-| `pdf_get_toc` | Get table of contents | Helper |
-| `pdf_search` | Search text in PDF | Helper |
-| `pdf_render_page` | Render page as PNG | Helper |
+| `pdf_info` | Get PDF metadata and overview | Pre-Stage |
+| `pdf_read` | Extract text + markers | Stage 1 |
+| `pdf_vision` | Analyze diagrams/charts (Mistral Vision) | Stage 2a |
+| `pdf_ocr` | Extract text from scans (Mistral OCR) | Stage 2b |
+| `pdf_extract_image` | Extract raw image (Claude Vision fallback) | Helper |
+| `pdf_search` | Search text across PDF | Helper |
 
-### `pdf_read_pages` - Stage 1
+### `pdf_read` - Stage 1
 
 **Purpose:** Fast text extraction with markers
 
@@ -455,7 +452,7 @@ provider: {
 
 **Example:**
 ```typescript
-const result = await tools.pdf_read_pages({
+const result = await tools.pdf_read({
   sources: [{ path: "document.pdf", pages: "1-10" }],
   insert_markers: true,
   include_image_indexes: true
@@ -471,7 +468,7 @@ const result = await tools.pdf_read_pages({
     data: {
       pages: [{
         page_number: 1,
-        text: "Title\n\n[IMAGE]\n\nDescription...",
+        text: "Title\n\n[IMAGE 0: 800x600px]\n\nDescription...",
         image_indexes: [0, 1],
         lines: [...]
       }]
@@ -480,9 +477,11 @@ const result = await tools.pdf_read_pages({
 }
 ```
 
-### `pdf_ocr_image` - Stage 2/3
+### `pdf_vision` - Stage 2a
 
-**Purpose:** Vision or OCR analysis on specific image
+**Purpose:** Analyze diagrams, charts, and illustrations using Mistral Vision API
+
+**Auto-Fallback:** If `MISTRAL_API_KEY` is not set, returns PNG image for Claude Vision analysis.
 
 **Parameters:**
 ```typescript
@@ -491,137 +490,84 @@ const result = await tools.pdf_read_pages({
     path: string;         // PDF path
   };
   page: number;           // Page number (1-based)
-  index: number;          // Image index (0-based, from pdf_read_pages)
-  provider: {
-    type: "mistral" | "mistral-ocr";  // Vision or OCR API
-    api_key?: string;                 // Optional (uses env var)
-    model?: string;                   // Optional model override
-    extras?: {
-      // For Vision API (type: "mistral")
-      prompt?: string;                // Custom analysis prompt
-      temperature?: string;           // "0" for deterministic
-      max_tokens?: string;            // Max response tokens
-
-      // For OCR API (type: "mistral-ocr")
-      tableFormat?: "html" | "markdown";     // Table output format
-      includeFullResponse?: "true" | "false"; // Get full structure
-      includeImageBase64?: "true" | "false";  // Include image data
-      extractHeader?: "true" | "false";       // Extract headers
-      extractFooter?: "true" | "false";       // Extract footers
-    };
-  };
-  cache?: boolean;         // Use cache (default: true)
+  index?: number;         // Optional: Image index (0-based, from pdf_read)
+                          // Omit to analyze entire rendered page
+  cache?: boolean;        // Use cache (default: true)
 }
 ```
 
-**Example (Vision API):**
+**Example (Specific Image):**
 ```typescript
-const diagram = await tools.pdf_ocr_image({
+const diagram = await tools.pdf_vision({
   source: { path: "diagram.pdf" },
   page: 5,
-  index: 0,
-  provider: {
-    type: "mistral",  // Vision API
-    extras: {
-      prompt: "Describe this flowchart in detail."
-    }
-  }
+  index: 0,  // Analyze specific image
+});
+
+// Result (with MISTRAL_API_KEY):
+// {
+//   "text": "Flowchart showing...",
+//   "provider": "mistral-vision-default",
+//   "from_cache": false
+// }
+
+// Result (without MISTRAL_API_KEY):
+// Returns PNG image + recommendation to set API key
+```
+
+**Example (Entire Page):**
+```typescript
+const page = await tools.pdf_vision({
+  source: { path: "diagram.pdf" },
+  page: 5,  // Analyze entire rendered page
 });
 ```
 
-**Example (OCR API):**
+### `pdf_ocr` - Stage 2b
+
+**Purpose:** Extract text from scanned documents using Mistral OCR API
+
+**Auto-Fallback:** If `MISTRAL_API_KEY` is not set, returns PNG image for Claude Vision analysis.
+
+**Parameters:**
 ```typescript
-const scanned = await tools.pdf_ocr_image({
+{
+  source: {
+    path: string;         // PDF path
+  };
+  page: number;           // Page number (1-based)
+  index?: number;         // Optional: Image index (0-based, from pdf_read)
+                          // Omit to OCR entire rendered page
+  scale?: number;         // Rendering scale (page OCR only, default: 1.5)
+  smart_ocr?: boolean;    // Auto-skip if text extraction sufficient (page OCR only)
+  cache?: boolean;        // Use cache (default: true)
+}
+```
+
+**Example (Specific Image):**
+```typescript
+const invoice = await tools.pdf_ocr({
+  source: { path: "scanned-invoice.pdf" },
+  page: 1,
+  index: 0,  // OCR specific image
+});
+
+// Result (with MISTRAL_API_KEY):
+// {
+//   "text": "Invoice #12345...",
+//   "provider": "mistral-ocr-default",
+//   "from_cache": false
+// }
+```
+
+**Example (Entire Page with Smart OCR):**
+```typescript
+const page = await tools.pdf_ocr({
   source: { path: "scan.pdf" },
   page: 1,
-  index: 0,
-  provider: {
-    type: "mistral-ocr",  // OCR API
-    extras: {
-      includeFullResponse: "true"
-    }
-  }
+  scale: 2.0,        // Higher resolution for better accuracy
+  smart_ocr: true,   // Skip OCR if native text extraction is good
 });
-```
-
-### `pdf_ocr_page` - Stage 2/3
-
-**Purpose:** Vision or OCR analysis on rendered page
-
-**Parameters:** Same as `pdf_ocr_image` but without `index`
-
-**Additional:**
-```typescript
-{
-  scale?: number;          // Rendering scale (1.0-3.0, default: 1.5)
-  smart_ocr?: boolean;     // Auto-skip if text extraction sufficient
-}
-```
-
-**Example:**
-```typescript
-const page = await tools.pdf_ocr_page({
-  source: { path: "invoice.pdf" },
-  page: 1,
-  provider: {
-    type: "mistral-ocr",
-    extras: {
-      tableFormat: "html",
-      includeFullResponse: "true"
-    }
-  },
-  scale: 2.0,
-  smart_ocr: true  // Skip OCR if native text is good
-});
-```
-
-### Full Response Structure (OCR API)
-
-With `includeFullResponse: "true"`:
-
-```typescript
-{
-  source: "document.pdf",
-  success: true,
-  data: {
-    text: "Markdown content...",
-    provider: "mistral-ocr",
-    model: "mistral-ocr-latest",
-    fingerprint: "abc123...",
-    from_cache: false,
-    page: 1,
-    pages: [{
-      index: 0,
-      markdown: "Content...",
-      header: "Page Header",
-      footer: "Page 1 of 3",
-      dimensions: {
-        width: 1224,
-        height: 1584,
-        dpi: 200
-      },
-      tables: [{
-        id: "tbl-0.html",
-        content: "<table>...</table>",
-        format: "html"
-      }],
-      images: [{
-        id: "img-0.jpeg",
-        topLeftX: 50,
-        topLeftY: 100,
-        bottomRightX: 200,
-        bottomRightY: 250,
-        imageBase64: "data:image/jpeg;base64,..."  // If includeImageBase64: "true"
-      }],
-      hyperlinks: ["https://example.com"]
-    }],
-    usage_info: {  // May be null depending on API
-      prompt_tokens: 1234,
-      completion_tokens: 567,
-      total_tokens: 1801
-    }
-  }
-}
 ```
 
 ---
