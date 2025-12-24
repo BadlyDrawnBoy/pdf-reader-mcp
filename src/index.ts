@@ -62,19 +62,21 @@ import { pdfExtractImage } from './handlers/extractImage.js';
 import { pdfInfo } from './handlers/pdfInfo.js';
 import { pdfOcr } from './handlers/pdfOcr.js';
 import { pdfRead } from './handlers/pdfRead.js';
+import { pdfVision } from './handlers/pdfVision.js';
 import { pdfSearch } from './handlers/searchPdf.js';
 
 const server = createServer({
   name: 'pdf-reader-mcp',
   version: '3.0.0',
   instructions:
-    'PDF toolkit for MCP clients: retrieve metadata, compute page statistics, inspect TOCs, read structured pages, search text, extract text/images, rasterize pages, perform OCR with caching, and manage caches (read_pdf maintained for compatibility).',
+    'PDF toolkit for MCP clients: retrieve metadata, read structured pages, search text, extract images, analyze with Vision API (diagrams/charts), perform OCR (scanned text/tables), and manage caches.',
   tools: {
     pdf_info: pdfInfo, // PRE-STAGE: Metadata and document overview
     pdf_read: pdfRead, // STAGE 1: Extract text from PDF pages
-    pdf_extract_image: pdfExtractImage, // STAGE 2: Extract specific images
-    pdf_ocr: pdfOcr, // STAGE 3: OCR for text in images
-    pdf_search: pdfSearch, // Shortcut: Search text across documents
+    pdf_vision: pdfVision, // STAGE 2a: Analyze diagrams/charts with Mistral Vision
+    pdf_ocr: pdfOcr, // STAGE 2b: Extract text from scanned documents with OCR
+    pdf_extract_image: pdfExtractImage, // HELPER: Extract raw image (for Claude Vision fallback)
+    pdf_search: pdfSearch, // HELPER: Search text across documents
     _pdf_cache_clear: pdfCacheClear, // Advanced: Cache management
   },
   transport: stdio(),
